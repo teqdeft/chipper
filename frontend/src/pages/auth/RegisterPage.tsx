@@ -1,6 +1,7 @@
 import { FormEvent, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { FieldShell, TextInput, TextSelect } from '@/components/ui/app/FormField';
+import { PasswordInput } from '@/components/ui/app/PasswordInput';
 import { FormAlert, SubmitButton } from '@/components/ui/app/FormAlert';
 import { Reveal } from '@/components/ui/Reveal';
 import { useAuth } from '@/app/providers/AuthProvider';
@@ -78,7 +79,7 @@ export default function RegisterPage() {
         });
         return;
       }
-      toast.success('Welcome to Chipper', 'Your account is ready.');
+      toast.success('Welcome to Chipper', 'Your account is ready — start exploring designs.');
       navigate('/designs', { replace: true });
     } catch (err) {
       const described = describeError(err);
@@ -166,25 +167,20 @@ export default function RegisterPage() {
             </TextSelect>
           </FieldShell>
 
-          <FieldShell
-            label="Password"
-            hint="At least 8 characters, with an uppercase letter and a number"
-            error={fieldErrors.password}
-          >
-            <TextInput
+          <FieldShell label="Password" error={fieldErrors.password}>
+            <PasswordInput
               name="password"
-              type="password"
               autoComplete="new-password"
               value={form.password}
               onChange={(e) => update('password', e.target.value)}
+              showRequirements
               required
             />
           </FieldShell>
 
           <FieldShell label="Confirm password" error={fieldErrors.confirmPassword}>
-            <TextInput
+            <PasswordInput
               name="confirmPassword"
-              type="password"
               autoComplete="new-password"
               value={form.confirmPassword}
               onChange={(e) => update('confirmPassword', e.target.value)}

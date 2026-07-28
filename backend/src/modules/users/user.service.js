@@ -83,7 +83,17 @@ const userService = {
         forumPosts: Number(forumStats?.posts) || 0,
         acceptedAnswers: Number(forumStats?.accepted_answers) || 0,
       },
-      recentDesigns: publishedDesigns,
+      // Serialised here rather than handed over raw — the client should never
+      // have to know about snake_case column names.
+      recentDesigns: publishedDesigns.map((design) => ({
+        id: design.uuid,
+        slug: design.slug,
+        title: design.title,
+        summary: design.summary,
+        downloads: Number(design.download_count) || 0,
+        stars: Number(design.star_count) || 0,
+        publishedAt: design.published_at,
+      })),
       isSelf: Boolean(isSelf),
     };
   },

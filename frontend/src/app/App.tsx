@@ -39,6 +39,7 @@ import ForumSearchPage from '@/pages/forum/ForumSearchPage';
 import InboxPage from '@/pages/messages/InboxPage';
 import ConversationPage from '@/pages/messages/ConversationPage';
 import NotificationsPage from '@/pages/messages/NotificationsPage';
+import AdminLoginPage from '@/pages/admin/AdminLoginPage';
 import AdminDashboardPage from '@/pages/admin/AdminDashboardPage';
 import AdminUsersPage from '@/pages/admin/AdminUsersPage';
 import AdminDesignsPage from '@/pages/admin/AdminDesignsPage';
@@ -148,7 +149,12 @@ export default function App() {
                 <Route path="u/:handle" element={<PublicProfilePage />} />
               </Route>
 
-              {/* ── Admin — SCR-032..038, per-screen capability ─────────────── */}
+              {/* ── Admin — SCR-032..038, per-screen capability ─────────────
+                  The console has its own entrance at /admin/login; the guard
+                  redirects unauthenticated visits to it. Outside the layout so
+                  the sign-in page has no admin chrome. */}
+              <Route path="admin/login" element={<AdminLoginPage />} />
+
               <Route path="admin" element={<AdminLayout />}>
                 <Route element={<RequireAccess screen="admin" />}>
                   <Route index element={<AdminDashboardPage />} />

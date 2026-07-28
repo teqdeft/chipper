@@ -50,7 +50,16 @@ export default function RequireAccess({ screen, children }: RequireAccessProps) 
   if (result.allowed) return <>{children ?? <Outlet />}</>;
 
   if (result.reason === 'unauthenticated') {
-    return <Navigate to="/login" replace state={{ from: location, screen: required.label }} />;
+    // The console has its own entrance — staff screens send you there, not to
+    // the community sign-in.
+    const isConsoleScreen = screen === 'admin' || screen.startsWith('admin/');
+    return (
+      <Navigate
+        to={isConsoleScreen ? '/admin/login' : '/login'}
+        replace
+        state={{ from: location, screen: required.label }}
+      />
+    );
   }
 
   if (result.reason === 'unverified') {

@@ -5,6 +5,7 @@ import { Logo, Logomark } from '@/components/ui/Logo';
 import { nav, site } from '@/lib/content';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/app/providers/AuthProvider';
+import { useToast } from '@/app/providers/ToastProvider';
 import { canAccess, ROLE_LABEL } from '@/lib/access';
 import type { ScreenKey } from '@/lib/access';
 
@@ -421,21 +422,35 @@ export default function Navbar({ mode = 'marketing' }: NavbarProps) {
  */
 function AccountLinks({ onNavigate }: { onNavigate: () => void }) {
   const { user, viewer, logout } = useAuth();
+  const toast = useToast();
   const navigate = useNavigate();
 
+  // No Admin entry here on purpose: the console has its own entrance at
+  // /admin/login and staff sign in there — the community menu never offers
+  // an admin route, whoever is signed in.
   const items: Array<{ to: string; label: string; screen?: ScreenKey }> = [
     { to: user ? `/u/${user.handle}` : '/login', label: 'Public profile' },
     { to: '/my-designs', label: 'My designs', screen: 'my-designs' },
     { to: '/settings/profile', label: 'Edit profile', screen: 'settings/profile' },
     { to: '/settings/account', label: 'Account settings', screen: 'settings/account' },
-    { to: '/admin', label: 'Admin', screen: 'admin' },
   ];
 
   const visible = items.filter((item) => !item.screen || canAccess(viewer, item.screen));
 
   async function handleSignOut() {
     onNavigate();
-    await logout();
+    const firstName = user?.name.split(' ')[0];
+    try {
+      await logout();
+      toast.success(
+        'Signed out',
+        firstName ? `See you soon, ${firstName}. Come back anytime.` : 'Come back anytime.',
+      );
+    } catch {
+      // logout() clears local state even if the revoke call fails, so the user
+      // is signed out either way — say so rather than showing a scary error.
+      toast.info('Signed out on this device');
+    }
     navigate('/', { replace: true });
   }
 

@@ -38,6 +38,31 @@ anyone verify or reset any account. Production generates a random code per reque
 
 ---
 
+## Where to sign in
+
+| Entrance | URL | For |
+| --- | --- | --- |
+| Community | `/login` | Everyone — members, uploaders |
+| **Admin console** | **`/admin/login`** | Moderators and admins |
+
+Both use the same credentials and the same API — `/admin/login` is a separate
+*entrance*, not a separate auth system. The two entrances are strictly
+separated, in both directions:
+
+- **`/login` refuses staff accounts.** Signing in there with a moderator or
+  admin account signs it straight back out with "Staff account" and a link to
+  the console (email carried over, pre-filled).
+- **`/admin/login` refuses member accounts** the same way, pointing at the
+  community sign-in.
+- The community account menu never offers an admin route — the console is
+  reached only via `/admin/login` (or `/admin` directly, which redirects there
+  when signed out).
+
+Once signed in at the console, staff can still browse the community pages
+normally — the session is shared; only the entrances differ.
+
+---
+
 ## Accounts
 
 **Password for every account below: `Chipper@2026`**
@@ -119,6 +144,15 @@ from the navbar and `/upload` shows the "you do not have access" screen naming S
 | An unregistered email | The same generic message — the API never reveals who is registered |
 | Open `/admin` as `a.chen@tno.nl` | Access screen naming SCR-032 and the role required |
 | Open `/upload` signed out | Redirect to `/login`, then back to `/upload` after signing in |
+| Open `/admin/users` signed out | Redirect to `/admin/login`, then straight to the users table |
+| Sign in at `/admin/login` as `user@chipper.org` | Signed back out with "Not a staff account" |
+| Sign in at `/admin/login` as `moderator@chipper.org` | Console opens; Users, News and Forum still refused |
+| Sign in at `/login` as `admin@chipper.org` | Signed back out with "Staff account" + a console link |
+
+> **Note on repeated testing.** `/auth/forgot-password` and
+> `/auth/resend-verification` are capped at **5 requests per hour per IP**. Hit
+> that and you get `429 RATE_LIMIT_EXCEEDED` — restart the API to clear the
+> in-memory counter, or wait it out.
 
 ---
 

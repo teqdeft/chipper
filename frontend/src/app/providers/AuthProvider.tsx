@@ -5,7 +5,7 @@
  * context, and resets when the API client reports the session has ended (a
  * refresh that could not be recovered).
  */
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { authApi } from '@/lib/api/auth';
 import type { RegisterPayload } from '@/lib/api/auth';
@@ -13,6 +13,7 @@ import { onSessionEnded, tokenStore } from '@/lib/api/client';
 import type { AuthUser, Permission, Role } from '@/lib/api/types';
 import { ROLE_LEVEL } from '@/lib/access';
 import type { Viewer } from '@/lib/access';
+import { useToast } from '@/app/providers/ToastProvider';
 
 type AuthContextValue = {
   user: AuthUser | null;
@@ -32,50 +33,89 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const hydrated = useRef(false);
+/**
+ * Shares one in-flight `/auth/me` between concurrent callers, so StrictMode's
+ * double mount (and any other overlapping hydration) costs a single request.
+ * Cleared once settled, so a later call re-reads the user.
+ */
+let hydration: Promise<AuthUser> | null = null;
 
-  // Restore the session on first paint.
+function hydrateSession(): Promise<AuthUser> {
+  if (!hydration) {
+    hydration = authApi.me().finally(() => {
+      hydration = null;
+    });
+  }
+  return hydration;
+}
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  // AuthProvider is mounted inside ToastProvider, so this is always available.
+  const toast = useToast();
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [isLoading, setIsLoading] = useState(() => Boolean(tokenStore.access || tokenStore.refresh));
+
+  /**
+   * Restore the session on first paint.
+   *
+   * StrictMode mounts effects twice in development (mount → cleanup → mount).
+   * The effect must therefore be safe to run more than once: `hydrateSession`
+   * shares one in-flight request between both runs, and `cancelled` only
+   * suppresses the *stale* run's state writes. Guarding the effect body with a
+   * ref instead would strand `isLoading` at true forever — the first run's
+   * cleanup marks it cancelled, and the second returns before doing any work.
+   */
   useEffect(() => {
-    if (hydrated.current) return;
-    hydrated.current = true;
+    if (!tokenStore.access && !tokenStore.refresh) {
+      setIsLoading(false);
+      return;
+    }
 
     let cancelled = false;
 
-    (async () => {
-      if (!tokenStore.access && !tokenStore.refresh) {
-        setIsLoading(false);
-        return;
-      }
-      try {
-        const current = await authApi.me();
+    hydrateSession()
+      .then((current) => {
         if (!cancelled) setUser(current);
-      } catch {
+      })
+      .catch(() => {
         // An unrecoverable token is not an error the user needs to see —
         // they simply continue as a guest.
         if (!cancelled) {
           tokenStore.clear();
           setUser(null);
         }
-      } finally {
+      })
+      .finally(() => {
         if (!cancelled) setIsLoading(false);
-      }
-    })();
+      });
 
     return () => {
       cancelled = true;
     };
   }, []);
 
-  // The client ends the session when a refresh fails; mirror that into state.
+  /**
+   * The client ends the session when a refresh cannot be recovered. Mirror that
+   * into state, and tell the user — being silently logged out mid-task is
+   * disorienting.
+   *
+   * Only announced if they were actually signed in: a stale token left in
+   * storage fails the same way at boot, and "your session expired" would be
+   * noise for someone who was already a guest.
+   */
   useEffect(() => {
-    const unsubscribe = onSessionEnded(() => setUser(null));
+    const unsubscribe = onSessionEnded(() => {
+      setUser((current) => {
+        if (current) {
+          toast.warning('Session expired', 'Please sign in again to pick up where you left off.');
+        }
+        return null;
+      });
+    });
     return () => {
       unsubscribe();
     };
-  }, []);
+  }, [toast]);
 
   const login = useCallback(async (email: string, password: string, remember = true) => {
     const result = await authApi.login(email, password, remember);

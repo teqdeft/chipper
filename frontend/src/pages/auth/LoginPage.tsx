@@ -1,11 +1,13 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { FieldShell, TextInput } from '@/components/ui/app/FormField';
+import { PasswordInput } from '@/components/ui/app/PasswordInput';
 import { FormAlert, SubmitButton } from '@/components/ui/app/FormAlert';
 import { Reveal } from '@/components/ui/Reveal';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { useToast } from '@/app/providers/ToastProvider';
 import { describeError } from '@/lib/api/errors';
+import { ROLE_LABEL, ROLE_LEVEL } from '@/lib/access';
 
 type LocationState = {
   from?: { pathname?: string };
@@ -17,7 +19,7 @@ type LocationState = {
 
 /** SCR-010 — Login (CHIP-002). */
 export default function LoginPage() {
-  const { login } = useAuth();
+  const { login, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const state = location.state as LocationState;
@@ -28,13 +30,18 @@ export default function LoginPage() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [alert, setAlert] = useState<{ title: string; message: string; tone: 'error' | 'warning' } | null>(null);
   const [needsVerification, setNeedsVerification] = useState(false);
+  const [staffBlocked, setStaffBlocked] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Confirmations handed over from the verify / reset screens.
+  // Confirmations handed over from the verify / reset screens. Announced once
+  // on arrival, then cleared from history so a refresh does not repeat them.
   useEffect(() => {
-    if (state?.verified) toast.success('Email confirmed', 'Your account is active — sign in to continue.');
-    if (state?.passwordReset) toast.success('Password updated', 'Sign in with your new password.');
-    // Only announce once, on arrival.
+    if (!state?.verified && !state?.passwordReset) return;
+
+    if (state.verified) toast.success('Email confirmed', 'Your account is active — sign in to continue.');
+    if (state.passwordReset) toast.success('Password updated', 'Sign in with your new password.');
+
+    navigate(location.pathname, { replace: true, state: null });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -48,11 +55,30 @@ export default function LoginPage() {
     setAlert(null);
     setFieldErrors({});
     setNeedsVerification(false);
+    setStaffBlocked(false);
     setIsLoading(true);
 
     try {
       const user = await login(form.email, form.password, remember);
-      toast.success(`Welcome back, ${user.name.split(' ')[0]}`);
+
+      // Mirror of the console's check, in the other direction: staff accounts
+      // belong at /admin/login. Sign them straight back out here so the two
+      // entrances stay strictly separated.
+      if (ROLE_LEVEL[user.role] >= ROLE_LEVEL.moderator) {
+        await logout();
+        setStaffBlocked(true);
+        setAlert({
+          title: 'Staff account',
+          message: `${user.email} has ${ROLE_LABEL[user.role]} access. Staff sign in at the admin console, not the community sign-in.`,
+          tone: 'warning',
+        });
+        return;
+      }
+
+      toast.success(
+        `Welcome back, ${user.name.split(' ')[0]}`,
+        "You're signed in — pick up where you left off.",
+      );
       // Return the user to whatever screen sent them here.
       navigate(state?.from?.pathname ?? '/designs', { replace: true });
     } catch (err) {
@@ -97,6 +123,18 @@ export default function LoginPage() {
             />
           ) : null}
 
+          {staffBlocked ? (
+            <p className="text-sm text-ink-70">
+              <Link
+                to="/admin/login"
+                state={{ email: form.email }}
+                className="font-semibold text-deep-coral hover:underline"
+              >
+                Go to the admin console sign-in →
+              </Link>
+            </p>
+          ) : null}
+
           {needsVerification ? (
             <p className="text-sm text-ink-70">
               Not confirmed yet?{' '}
@@ -123,9 +161,8 @@ export default function LoginPage() {
           </FieldShell>
 
           <FieldShell label="Password" error={fieldErrors.password}>
-            <TextInput
+            <PasswordInput
               name="password"
-              type="password"
               autoComplete="current-password"
               value={form.password}
               onChange={(e) => update('password', e.target.value)}

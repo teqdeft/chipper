@@ -2,113 +2,186 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { PageHeader } from '@/components/ui/app/PageHeader';
 import { EmptyState } from '@/components/ui/app/EmptyState';
-import { Reveal, RevealGroup, RevealItem } from '@/components/ui/Reveal';
 import { StatusBadge } from '@/components/ui/app/StatusBadge';
+import { TextInput, TextSelect } from '@/components/ui/app/FormField';
+import { ErrorState, LoadingState } from '@/components/ui/app/LoadingState';
+import { Pagination } from '@/components/ui/app/Pagination';
+import { Reveal, RevealGroup, RevealItem } from '@/components/ui/Reveal';
+import { useApiResource } from '@/hooks/useApiResource';
+import { useToast } from '@/app/providers/ToastProvider';
+import { adminApi } from '@/lib/api/admin';
+import type { AdminComment } from '@/lib/api/admin';
 
-type AdminComment = {
-  id: string;
-  designId: string;
-  designTitle: string;
-  author: string;
-  body: string;
-  at: string;
-  hidden: boolean;
+const statusTone: Record<AdminComment['status'], 'green' | 'yellow' | 'coral'> = {
+  visible: 'green',
+  hidden: 'yellow',
+  removed: 'coral',
 };
 
-const initialComments: AdminComment[] = [
-  {
-    id: 'cm1',
-    designId: 'd-alveolar-01',
-    designTitle: 'Alveolar barrier · dual channel',
-    author: 'A. Chen',
-    body: 'What pressure range does the apical channel tolerate during co-culture?',
-    at: '2026-06-11',
-    hidden: false,
-  },
-  {
-    id: 'cm2',
-    designId: 'd-liver-perfusion',
-    designTitle: 'Hepatic perfusion cassette',
-    author: 'anonymous',
-    body: 'Check out my unrelated product at example.com',
-    at: '2026-06-10',
-    hidden: false,
-  },
-  {
-    id: 'cm3',
-    designId: 'd-kidney-prox',
-    designTitle: 'Proximal tubule chip',
-    author: 'J. Kim',
-    body: 'We reproduced TEER values within 10% using your port layout.',
-    at: '2026-06-08',
-    hidden: false,
-  },
-];
-
-/** SCR-036 — Admin comments hide/remove. */
+/** SCR-036 — Manage comments (CHIP-031). */
 export default function AdminCommentsPage() {
-  const [comments, setComments] = useState<AdminComment[]>(initialComments);
-  const visible = comments.filter((c) => !c.hidden);
+  const toast = useToast();
+  const [search, setSearch] = useState('');
+  const [submittedSearch, setSubmittedSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [page, setPage] = useState(1);
+  const [busyId, setBusyId] = useState<number | null>(null);
 
-  const hide = (id: string) => {
-    setComments((prev) => prev.map((c) => (c.id === id ? { ...c, hidden: true } : c)));
-  };
+  const { data, isLoading, error, reload, setData } = useApiResource(
+    () =>
+      adminApi.comments({
+        page,
+        limit: 20,
+        status: statusFilter || undefined,
+        search: submittedSearch || undefined,
+      }),
+    [page, statusFilter, submittedSearch],
+  );
 
-  const remove = (id: string) => {
-    setComments((prev) => prev.filter((c) => c.id !== id));
-  };
+  async function moderate(comment: AdminComment, action: 'hide' | 'restore' | 'remove') {
+    if (action === 'remove' && !window.confirm('Remove this comment permanently from the design page?')) {
+      return;
+    }
+
+    setBusyId(comment.id);
+    try {
+      await adminApi.moderateEntity('design_comment', comment.id, action);
+      const nextStatus = action === 'hide' ? 'hidden' : action === 'remove' ? 'removed' : 'visible';
+      if (data) {
+        setData({
+          ...data,
+          items: data.items.map((c) => (c.id === comment.id ? { ...c, status: nextStatus } : c)),
+        });
+      }
+      toast.success(
+        action === 'hide' ? 'Comment hidden' : action === 'remove' ? 'Comment removed' : 'Comment restored',
+        `On "${comment.design.title}" — the author has been notified.`,
+      );
+    } catch (err) {
+      toast.fromError(err);
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   return (
     <div className="space-y-8">
       <PageHeader
         eyebrow="Administration"
         title="Comments"
-        lede="Moderate discussion on design pages. Hidden comments remain visible to staff."
-        actions={
-          <StatusBadge tone="ink">{visible.length} visible</StatusBadge>
-        }
+        lede="Every comment across the design library. Hide spam, restore mistakes."
       />
 
-      {visible.length === 0 ? (
+      <form
+        className="flex flex-wrap items-end gap-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          setPage(1);
+          setSubmittedSearch(search);
+        }}
+      >
+        <div className="min-w-[220px] flex-1">
+          <TextInput
+            placeholder="Search comment text…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <TextSelect
+          className="w-40"
+          value={statusFilter}
+          onChange={(e) => {
+            setPage(1);
+            setStatusFilter(e.target.value);
+          }}
+        >
+          <option value="">All statuses</option>
+          {(['visible', 'hidden', 'removed'] as const).map((status) => (
+            <option key={status} value={status}>
+              {status}
+            </option>
+          ))}
+        </TextSelect>
+        <button type="submit" className="btn-ghost text-sm">
+          Search
+        </button>
+      </form>
+
+      {isLoading ? (
+        <LoadingState label="Loading comments…" />
+      ) : error ? (
+        <ErrorState error={error} onRetry={reload} />
+      ) : !data || data.items.length === 0 ? (
         <Reveal delay={0.06}>
-          <EmptyState title="No comments to review" body="All comments are hidden or removed." />
+          <EmptyState title="No comments" body="Nothing matches this filter yet." />
         </Reveal>
       ) : (
-        <RevealGroup className="space-y-3" stagger={0.06}>
-          {visible.map((comment) => (
-            <RevealItem key={comment.id}>
-              <div className="card p-5">
-              <div className="flex flex-wrap items-center gap-2">
-                <Link
-                  to={`/designs/${comment.designId}`}
-                  className="text-sm font-semibold text-deep-coral hover:underline"
-                >
-                  {comment.designTitle}
-                </Link>
-                <span className="text-xs text-ink-40">· {comment.at}</span>
-              </div>
-              <p className="mt-2 text-sm font-semibold text-aubergine">{comment.author}</p>
-              <p className="mt-1 text-sm leading-relaxed text-ink-70">{comment.body}</p>
-              <div className="mt-4 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  className="rounded-field border border-line px-3 py-1.5 text-xs font-semibold text-ink-70 hover:bg-periwinkle-tint/50"
-                  onClick={() => hide(comment.id)}
-                >
-                  Hide
-                </button>
-                <button
-                  type="button"
-                  className="rounded-field border border-deep-coral/40 bg-coral/10 px-3 py-1.5 text-xs font-semibold text-deep-coral hover:bg-coral/20"
-                  onClick={() => remove(comment.id)}
-                >
-                  Remove
-                </button>
-              </div>
-              </div>
-            </RevealItem>
-          ))}
-        </RevealGroup>
+        <>
+          <RevealGroup className="space-y-3" stagger={0.05}>
+            {data.items.map((comment) => {
+              const busy = busyId === comment.id;
+              return (
+                <RevealItem key={comment.id}>
+                  <div className="card flex flex-col gap-4 p-5 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <StatusBadge tone={statusTone[comment.status]}>{comment.status}</StatusBadge>
+                        <span className="text-sm font-semibold text-aubergine">
+                          {comment.author.name}
+                          <span className="font-normal text-ink-55"> on </span>
+                          <Link
+                            to={`/designs/${comment.design.slug}`}
+                            className="hover:text-deep-coral hover:underline"
+                          >
+                            {comment.design.title}
+                          </Link>
+                        </span>
+                      </div>
+                      <p className="mt-2 text-sm leading-relaxed text-ink-70">{comment.body}</p>
+                      <p className="mt-2 text-xs text-ink-40">
+                        @{comment.author.handle} · {new Date(comment.createdAt).toLocaleDateString()}
+                      </p>
+                    </div>
+
+                    <div className="flex shrink-0 flex-wrap gap-2">
+                      {comment.status === 'visible' ? (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          className="rounded-field border border-line px-3 py-1.5 text-xs font-semibold text-ink-70 hover:bg-periwinkle-tint/50 disabled:opacity-40"
+                          onClick={() => void moderate(comment, 'hide')}
+                        >
+                          Hide
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          className="rounded-field border border-green/40 bg-green/10 px-3 py-1.5 text-xs font-semibold text-[#0f7a52] hover:bg-green/20 disabled:opacity-40"
+                          onClick={() => void moderate(comment, 'restore')}
+                        >
+                          Restore
+                        </button>
+                      )}
+                      {comment.status !== 'removed' ? (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          className="rounded-field border border-deep-coral/40 bg-coral/10 px-3 py-1.5 text-xs font-semibold text-deep-coral hover:bg-coral/20 disabled:opacity-40"
+                          onClick={() => void moderate(comment, 'remove')}
+                        >
+                          Remove
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+                </RevealItem>
+              );
+            })}
+          </RevealGroup>
+
+          <Pagination pagination={data.pagination} onPage={setPage} />
+        </>
       )}
     </div>
   );

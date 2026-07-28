@@ -1,6 +1,7 @@
 import { FormEvent, useState } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { FieldShell, TextInput } from '@/components/ui/app/FormField';
+import { PasswordInput } from '@/components/ui/app/PasswordInput';
 import { FormAlert, SubmitButton } from '@/components/ui/app/FormAlert';
 import { OtpInput } from '@/components/ui/app/OtpInput';
 import { Reveal } from '@/components/ui/Reveal';
@@ -124,25 +125,20 @@ export default function ResetPasswordPage() {
             </>
           ) : null}
 
-          <FieldShell
-            label="New password"
-            hint="At least 8 characters, with an uppercase letter and a number"
-            error={fieldErrors.password}
-          >
-            <TextInput
+          <FieldShell label="New password" error={fieldErrors.password}>
+            <PasswordInput
               name="password"
-              type="password"
               autoComplete="new-password"
               value={form.password}
               onChange={(e) => update('password', e.target.value)}
+              showRequirements
               required
             />
           </FieldShell>
 
           <FieldShell label="Confirm password" error={fieldErrors.confirmPassword}>
-            <TextInput
+            <PasswordInput
               name="confirmPassword"
-              type="password"
               autoComplete="new-password"
               value={form.confirmPassword}
               onChange={(e) => update('confirmPassword', e.target.value)}

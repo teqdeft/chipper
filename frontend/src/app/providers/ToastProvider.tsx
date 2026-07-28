@@ -1,15 +1,14 @@
 /**
  * Toast notifications.
  *
- * One channel for transient feedback across the app: a save succeeded, an upload
- * failed, a session expired. Designed to match the Chipper surface — warm canvas,
- * hairline border, coral accent — and to stay out of the way:
+ * Transient feedback for sign-in, sign-up, logout, saves, and failures.
+ * Dark aubergine glass against the warm canvas — high contrast, quiet chrome —
+ * so the notice feels carved from the brand rather than bolted on.
  *
- *  - stacked bottom-right on desktop, full-width top on mobile
- *  - auto-dismiss with a progress bar that pauses on hover/focus
- *  - errors persist until dismissed, because they usually need a decision
- *  - `role="alert"` for errors, `role="status"` for the rest, so screen readers
- *    interrupt only when something actually went wrong
+ *  - top-center, below the nav
+ *  - auto-dismiss with a hairline progress track (pauses on hover/focus)
+ *  - errors persist until dismissed
+ *  - `role="alert"` for errors, `role="status"` otherwise
  *  - respects prefers-reduced-motion
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
@@ -48,15 +47,20 @@ type ToastContextValue = {
 
 const ToastContext = createContext<ToastContextValue | null>(null);
 
+/**
+ * Auto-dismiss defaults per tone. Errors linger longest but do dismiss — a
+ * stale "No connection" sitting there after the network recovers is worse than
+ * the risk of missing it, and the timer pauses on hover for readers. A toast
+ * that truly must persist passes `duration: 0` explicitly.
+ */
 const DEFAULT_DURATION: Record<ToastTone, number> = {
-  success: 4000,
-  info: 5000,
+  success: 4800,
+  info: 5200,
   warning: 7000,
-  // Errors wait for the reader — they usually carry a next step.
-  error: 0,
+  error: 8000,
 };
 
-const MAX_VISIBLE = 4;
+const MAX_VISIBLE = 3;
 
 let counter = 0;
 const nextId = () => `toast-${++counter}`;
@@ -78,8 +82,15 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       duration: input.duration ?? DEFAULT_DURATION[tone],
       action: input.action,
     };
-    // Oldest falls off the top so the stack never grows without bound.
-    setToasts((current) => [...current, toast].slice(-MAX_VISIBLE));
+
+    setToasts((current) => {
+      const duplicate = current.find(
+        (t) => t.tone === toast.tone && t.title === toast.title && t.message === toast.message,
+      );
+      if (duplicate) return current;
+      return [...current, toast].slice(-MAX_VISIBLE);
+    });
+
     return toast.id;
   }, []);
 
@@ -124,20 +135,22 @@ export function useToast() {
 
 // ── Presentation ───────────────────────────────────────────────────────────
 
-const TONE_STYLE: Record<ToastTone, { bar: string; icon: string; ring: string }> = {
-  success: { bar: 'bg-green', icon: 'text-green', ring: 'ring-green/20' },
-  error: { bar: 'bg-deep-coral', icon: 'text-deep-coral', ring: 'ring-deep-coral/20' },
-  warning: { bar: 'bg-coral', icon: 'text-deep-coral', ring: 'ring-coral/25' },
-  info: { bar: 'bg-periwinkle', icon: 'text-aubergine', ring: 'ring-line-strong' },
+const TONE_ACCENT: Record<ToastTone, string> = {
+  success: 'text-green',
+  error: 'text-coral',
+  warning: 'text-yellow',
+  info: 'text-periwinkle',
 };
+
+const ease = [0.22, 1, 0.36, 1] as const;
 
 function ToastViewport({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: string) => void }) {
   return (
     <div
-      className="pointer-events-none fixed inset-x-0 top-0 z-[200] flex flex-col gap-2 p-4 sm:inset-x-auto sm:bottom-0 sm:right-0 sm:top-auto sm:max-w-sm sm:p-6"
+      className="pointer-events-none fixed inset-x-0 top-0 z-[200] flex flex-col items-center gap-3 px-4 pb-4 pt-[4.75rem] sm:px-6 sm:pt-[5.25rem]"
       aria-live="polite"
     >
-      <AnimatePresence initial={false}>
+      <AnimatePresence initial={false} mode="popLayout">
         {toasts.map((toast) => (
           <ToastCard key={toast.id} toast={toast} onDismiss={onDismiss} />
         ))}
@@ -151,10 +164,8 @@ function ToastCard({ toast, onDismiss }: { toast: Toast; onDismiss: (id: string)
   const [paused, setPaused] = useState(false);
   const remaining = useRef(toast.duration);
   const startedAt = useRef(Date.now());
-  const style = TONE_STYLE[toast.tone];
+  const accent = TONE_ACCENT[toast.tone];
 
-  // Auto-dismiss, pausing while the pointer or focus is on the card so a toast
-  // is never pulled away mid-read.
   useEffect(() => {
     if (!toast.duration || paused) return;
     startedAt.current = Date.now();
@@ -168,29 +179,62 @@ function ToastCard({ toast, onDismiss }: { toast: Toast; onDismiss: (id: string)
   return (
     <motion.div
       layout={!reduced}
-      initial={reduced ? { opacity: 0 } : { opacity: 0, y: 16, scale: 0.97 }}
-      animate={reduced ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
-      exit={reduced ? { opacity: 0 } : { opacity: 0, x: 24, scale: 0.97 }}
-      transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+      initial={
+        reduced
+          ? { opacity: 0 }
+          : { opacity: 0, y: -14, filter: 'blur(6px)' }
+      }
+      animate={
+        reduced
+          ? { opacity: 1 }
+          : { opacity: 1, y: 0, filter: 'blur(0px)' }
+      }
+      exit={
+        reduced
+          ? { opacity: 0 }
+          : { opacity: 0, y: -8, filter: 'blur(4px)', transition: { duration: 0.22 } }
+      }
+      transition={{ duration: 0.45, ease }}
       role={toast.tone === 'error' ? 'alert' : 'status'}
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
       onFocusCapture={() => setPaused(true)}
       onBlurCapture={() => setPaused(false)}
-      className={cn(
-        'pointer-events-auto relative overflow-hidden rounded-[14px] border border-line bg-canvas shadow-soft ring-1',
-        style.ring,
-      )}
+      className="pointer-events-auto relative w-full max-w-[380px] overflow-hidden rounded-[14px]"
+      style={{
+        background:
+          'linear-gradient(165deg, rgba(69, 8, 31, 0.97) 0%, rgba(52, 6, 24, 0.98) 100%)',
+        boxShadow:
+          '0 0 0 1px rgba(255, 252, 249, 0.08), 0 1px 1px rgba(69, 8, 31, 0.2), 0 18px 40px -12px rgba(69, 8, 31, 0.55), 0 8px 16px -8px rgba(69, 8, 31, 0.35)',
+      }}
     >
-      <div className="flex items-start gap-3 p-4">
-        <span className={cn('mt-0.5 shrink-0', style.icon)} aria-hidden>
+      {/* Specular rim — thin light catch along the top edge */}
+      <span
+        className="pointer-events-none absolute inset-x-0 top-0 h-px"
+        style={{
+          background:
+            'linear-gradient(90deg, transparent 8%, rgba(255,252,249,0.28) 40%, rgba(255,187,214,0.22) 55%, transparent 92%)',
+        }}
+        aria-hidden
+      />
+
+      <div className="relative flex items-start gap-3.5 px-4 py-3.5 sm:px-[1.125rem] sm:py-4">
+        <span
+          className={cn(
+            'mt-px flex h-[1.375rem] w-[1.375rem] shrink-0 items-center justify-center',
+            accent,
+          )}
+          aria-hidden
+        >
           <ToastIcon tone={toast.tone} />
         </span>
 
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold leading-snug text-aubergine">{toast.title}</p>
+          <p className="text-[0.9375rem] font-semibold leading-snug tracking-[-0.01em] text-canvas">
+            {toast.title}
+          </p>
           {toast.message ? (
-            <p className="mt-1 text-sm leading-relaxed text-ink-70">{toast.message}</p>
+            <p className="mt-1 text-[0.8125rem] leading-relaxed text-canvas/65">{toast.message}</p>
           ) : null}
 
           {toast.action ? (
@@ -199,7 +243,7 @@ function ToastCard({ toast, onDismiss }: { toast: Toast; onDismiss: (id: string)
                 <Link
                   to={toast.action.to}
                   onClick={() => onDismiss(toast.id)}
-                  className="text-sm font-semibold text-deep-coral hover:underline"
+                  className="text-[0.8125rem] font-semibold text-pink transition-colors hover:text-canvas"
                 >
                   {toast.action.label} →
                 </Link>
@@ -210,7 +254,7 @@ function ToastCard({ toast, onDismiss }: { toast: Toast; onDismiss: (id: string)
                     toast.action?.onClick?.();
                     onDismiss(toast.id);
                   }}
-                  className="text-sm font-semibold text-deep-coral hover:underline"
+                  className="text-[0.8125rem] font-semibold text-pink transition-colors hover:text-canvas"
                 >
                   {toast.action.label}
                 </button>
@@ -223,22 +267,27 @@ function ToastCard({ toast, onDismiss }: { toast: Toast; onDismiss: (id: string)
           type="button"
           onClick={() => onDismiss(toast.id)}
           aria-label="Dismiss notification"
-          className="-mr-1 -mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-btn text-ink-55 transition-colors hover:bg-periwinkle-tint/60 hover:text-aubergine"
+          className="-mr-1 -mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-canvas/40 transition-colors hover:bg-canvas/[0.08] hover:text-canvas/85"
         >
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
-            <path d="m3.5 3.5 7 7m0-7-7 7" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden>
+            <path d="m2.5 2.5 7 7m0-7-7 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
           </svg>
         </button>
       </div>
 
       {toast.duration > 0 && !reduced ? (
-        <motion.span
-          className={cn('absolute bottom-0 left-0 h-0.5', style.bar)}
-          initial={{ width: '100%' }}
-          animate={{ width: paused ? undefined : '0%' }}
-          transition={{ duration: toast.duration / 1000, ease: 'linear' }}
-          aria-hidden
-        />
+        <div className="relative h-px w-full overflow-hidden bg-canvas/[0.08]" aria-hidden>
+          <motion.span
+            className="absolute inset-y-0 left-0 w-full origin-left"
+            style={{
+              background:
+                'linear-gradient(90deg, rgba(255,187,214,0.15), rgba(255,252,249,0.55) 45%, rgba(255,252,249,0.25))',
+            }}
+            initial={{ scaleX: 1 }}
+            animate={{ scaleX: paused ? undefined : 0 }}
+            transition={{ duration: toast.duration / 1000, ease: 'linear' }}
+          />
+        </div>
       ) : null}
     </motion.div>
   );
@@ -248,31 +297,31 @@ function ToastIcon({ tone }: { tone: ToastTone }) {
   if (tone === 'success') {
     return (
       <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden>
-        <circle cx="10" cy="10" r="8.25" stroke="currentColor" strokeWidth="1.6" />
-        <path d="m6.5 10.2 2.4 2.3 4.6-4.8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+        <circle cx="10" cy="10" r="7.5" stroke="currentColor" strokeWidth="1.4" opacity="0.35" />
+        <path
+          d="m6.6 10.2 2.3 2.2 4.5-4.7"
+          stroke="currentColor"
+          strokeWidth="1.7"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
       </svg>
     );
   }
   if (tone === 'info') {
     return (
       <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden>
-        <circle cx="10" cy="10" r="8.25" stroke="currentColor" strokeWidth="1.6" />
-        <path d="M10 9v4.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-        <circle cx="10" cy="6.4" r="1" fill="currentColor" />
+        <circle cx="10" cy="10" r="7.5" stroke="currentColor" strokeWidth="1.4" opacity="0.35" />
+        <path d="M10 9.1v4.2" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+        <circle cx="10" cy="6.6" r="0.95" fill="currentColor" />
       </svg>
     );
   }
-  // error + warning share the alert triangle.
   return (
     <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden>
-      <path
-        d="M10 2.75 18 16.5H2L10 2.75Z"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinejoin="round"
-      />
-      <path d="M10 8v3.4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-      <circle cx="10" cy="13.9" r="1" fill="currentColor" />
+      <circle cx="10" cy="10" r="7.5" stroke="currentColor" strokeWidth="1.4" opacity="0.35" />
+      <path d="M10 6.6v4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+      <circle cx="10" cy="13.3" r="0.95" fill="currentColor" />
     </svg>
   );
 }
