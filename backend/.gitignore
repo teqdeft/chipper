@@ -1,0 +1,25 @@
+node_modules/
+logs/
+*.log
+npm-debug.log*
+
+# Environment — never commit real secrets
+.env
+.env.production
+.env.local
+.env.*.local
+
+# Uploaded user content
+uploads/
+!uploads/.gitkeep
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+coverage/
+dist/
+tmp/

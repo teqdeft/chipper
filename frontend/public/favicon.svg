@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- Styleguide §002: aubergine ground + coral channel mark -->
+  <rect width="64" height="64" rx="14" fill="#45081F"/>
+  <g transform="translate(11 15.5) scale(0.127)">
+    <path
+      d="M193.21,232.38h95.84c15.27,0,27.65-12.38,27.65-27.65,0-15.27-12.38-27.65-27.65-27.65H95.33c-45.14,0-81.74-36.6-81.74-81.74S50.19,13.59,95.33,13.59h125.89c15.27,0,27.65,12.38,27.65,27.65,0,15.27-12.38,27.65-27.65,27.65h-121.17c-15.27,0-27.65,12.38-27.65,27.65s12.38,27.65,27.65,27.65h185.79"
+      stroke="#FC7147"
+      stroke-width="27.18"
+      stroke-linecap="round"
+      stroke-miterlimit="10"
+      fill="none"
+    />
+  </g>
+</svg>

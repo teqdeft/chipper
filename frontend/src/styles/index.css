@@ -1,0 +1,178 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --btn-radius: 10px;
+    --font-bricolage: 'Bricolage Grotesque', ui-sans-serif, system-ui, sans-serif;
+    --font-inter: 'Inter', ui-sans-serif, system-ui, sans-serif;
+    color-scheme: light;
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    scroll-behavior: auto; /* Lenis owns smooth scroll */
+  }
+
+  /* Lenis smooth-scroll wiring */
+  html.lenis,
+  html.lenis body {
+    height: auto;
+  }
+  .lenis.lenis-smooth {
+    scroll-behavior: auto !important;
+  }
+  .lenis.lenis-smooth [data-lenis-prevent] {
+    overscroll-behavior: contain;
+  }
+  .lenis.lenis-stopped {
+    overflow: clip;
+  }
+
+  body {
+    @apply bg-canvas text-aubergine font-sans antialiased;
+    font-feature-settings: 'cv11', 'ss01';
+    overflow-x: hidden;
+  }
+
+  ::selection {
+    background: #fc7147;
+    color: #fffcf9;
+  }
+
+  /* Restrained, brand-correct focus ring — part of the "floor" */
+  :where(a, button, input, textarea, select, [tabindex]):focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px #fffcf9, 0 0 0 6px rgba(252, 113, 71, 0.9);
+    border-radius: 8px;
+  }
+
+  h1, h2, h3, h4 {
+    @apply font-display;
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+}
+
+@layer components {
+  .container-content {
+    @apply mx-auto w-full min-w-0 max-w-content px-gutter;
+  }
+
+  /* Eyebrow — Inter 600 caps, .12em, no descenders jumping the line */
+  .eyebrow {
+    @apply font-sans text-[0.72rem] font-semibold uppercase leading-none tracking-eyebrow;
+  }
+
+  /* Data & units — accent colour, per the type spec */
+  .data-unit {
+    @apply font-sans font-semibold text-deep-coral;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---- Buttons: yellow = start (no outline), deep periwinkle = get, outline = secondary only ---- */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-btn border-[1.5px]
+           px-5 py-2.5 font-sans text-[0.9rem] font-bold leading-none
+           transition-[transform,background-color,border-color,box-shadow] duration-300 ease-premium
+           will-change-transform
+           sm:px-6 sm:py-3 sm:text-[0.95rem];
+  }
+  /* Equal-width stacked CTAs (client: wider + same width) */
+  .btn-row {
+    @apply grid w-full grid-cols-1 gap-3;
+  }
+  .btn-row > * {
+    @apply w-full min-w-0;
+  }
+  .btn:active {
+    transform: translateY(1px); /* press drops 1px */
+  }
+  /* Styleguide §005: outline on the secondary only — yellow has no aubergine border */
+  .btn-primary {
+    @apply btn border-yellow bg-yellow text-aubergine;
+  }
+  .btn-primary:hover {
+    @apply border-yellow-hover bg-yellow-hover;
+  }
+  .btn-get {
+    @apply btn border-deep-periwinkle bg-deep-periwinkle text-canvas;
+  }
+  .btn-get:hover {
+    @apply bg-deep-periwinkle-hover border-deep-periwinkle-hover;
+  }
+  .btn-ghost {
+    @apply btn border-aubergine bg-transparent text-aubergine;
+  }
+  .btn-ghost:hover {
+    @apply bg-periwinkle-tint;
+  }
+
+  /* Rounded cards, soft shadow, restrained border. Hover lifts 2px, border steps up, nothing changes colour. */
+  .card {
+    @apply rounded-[16px] border border-line bg-canvas shadow-soft
+           transition-[transform,box-shadow,border-color] duration-500 ease-premium
+           sm:rounded-card;
+  }
+  .card-hover:hover {
+    @apply -translate-y-0.5 border-line-strong shadow-card-hover;
+  }
+
+  .pill {
+    @apply inline-flex items-center gap-1.5 rounded-pill border border-line px-3 py-1
+           font-sans text-[0.78rem] font-semibold leading-none;
+  }
+
+  .hairline {
+    @apply h-px w-full bg-line;
+  }
+
+  /* Mobile horizontal slider — native scroll only; both axes allowed */
+  .mobile-slider {
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    touch-action: pan-x pan-y;
+    scroll-padding-inline: 0;
+  }
+  .mobile-slider::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  .bg-grain {
+    background-image: radial-gradient(rgba(69, 8, 31, 0.025) 1px, transparent 1px);
+    background-size: 4px 4px;
+  }
+  /* Reveal helper used with IntersectionObserver / Framer */
+  .will-reveal {
+    opacity: 0;
+  }
+}
+
+/* Reduced motion: honour the floor. Kill transforms/animations, keep content visible. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  .will-reveal {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}

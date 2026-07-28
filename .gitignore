@@ -1,0 +1,80 @@
+node_modules/
+logs/
+*.log
+npm-debug.log*
+
+# Environment — never commit real secrets
+.env
+.env.production
+.env.local
+.env.*.local
+
+# Uploaded user content
+uploads/
+!uploads/.gitkeep
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+coverage/
+dist/
+tmp/
+
+# Dependencies
+node_modules/
+
+# Vite
+dist/
+*.local
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
+
+# TypeScript
+*.tsbuildinfo
+
+# Coverage
+coverage/
+
+# Cache
+.cache/
+.eslintcache
+
+# Next.js (legacy)
+.next/
+out/
+next-env.d.ts
+
+# Vercel
+.vercel/
+
+# Turbo
+.turbo/
+
+# Package manager
+.pnp
+.pnp.js
