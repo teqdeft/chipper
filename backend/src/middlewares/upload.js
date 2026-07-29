@@ -101,7 +101,12 @@ function relativePath(absolutePath) {
 
 function publicUrlFor(relative) {
   if (!relative) return null;
-  return `${config.upload.publicPath}/${String(relative).replace(/^\/+/, '')}`;
+  // Absolute URL: a path-only value would resolve against the *frontend* origin
+  // in the browser and 404 whenever the client is served from a different host.
+  const base = /^https?:\/\//i.test(config.upload.publicPath)
+    ? config.upload.publicPath
+    : `${config.app.url}${config.upload.publicPath}`;
+  return `${base}/${String(relative).replace(/^\/+/, '')}`;
 }
 
 function buildStorage(folder) {
