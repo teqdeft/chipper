@@ -107,13 +107,13 @@ async function resolveOneTimeCredential({ token, email, otp }, type, invalidMess
 }
 
 /**
- * Echoes the code back to the caller while the static dev OTP is in use, so the
- * flow can be exercised without a mail server. Never returned in production —
- * config refuses to boot with a static OTP there.
+ * Echoes the code back to the caller while the static OTP is in use, so the
+ * flow can be exercised without a mail server. Stops as soon as
+ * OTP_STATIC_ENABLED is turned off (i.e. once real email delivery exists).
  */
 function devOtpPayload(otp) {
-  if (!otp || config.isProduction || !config.otp.staticEnabled) return {};
-  return { devOtp: otp, devNote: 'Static development OTP — disabled automatically in production' };
+  if (!otp || !config.otp.staticEnabled) return {};
+  return { devOtp: otp, devNote: 'Static OTP — remove OTP_STATIC_ENABLED once real email is set up' };
 }
 
 /** Issues an access + refresh pair and records the session. */

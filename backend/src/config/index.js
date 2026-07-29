@@ -107,16 +107,14 @@ if (error) {
   process.exit(1);
 }
 
-// A fixed, guessable OTP would let anyone verify or reset any account. Refuse to
-// boot rather than let the development shortcut reach a live deployment.
+// A fixed, guessable OTP lets anyone verify or reset any account. Allowed in
+// production only as a deliberate choice (no mail server yet) — warn loudly.
 if (env.NODE_ENV === 'production' && env.OTP_STATIC_ENABLED) {
   // eslint-disable-next-line no-console
-  console.error(
-    '[config] OTP_STATIC_ENABLED=true is not allowed in production.\n' +
-      '         A static OTP lets anyone verify or reset any account.\n' +
-      `         Set OTP_STATIC_ENABLED=false in ${envFile}.`,
+  console.warn(
+    '[config] WARNING: OTP_STATIC_ENABLED=true in production — every account ' +
+      'can be verified or reset with the same code. Disable once real email is set up.',
   );
-  process.exit(1);
 }
 
 const MB = 1024 * 1024;
