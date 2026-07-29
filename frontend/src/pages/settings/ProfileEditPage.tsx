@@ -149,7 +149,7 @@ export default function ProfileEditPage() {
   }
 
   return (
-    <div className="container-content pb-16 sm:pb-24 sm:pt-28 pt-24">
+    <div className="container-content pb-16 sm:pb-24">
       <PageHeader
         eyebrow="Settings"
         title="Edit profile"
