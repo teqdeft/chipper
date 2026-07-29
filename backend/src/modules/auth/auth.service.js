@@ -367,8 +367,10 @@ const authService = {
   /**
    * CHIP-001 — confirm an email address and activate the account.
    * Accepts either `{ token }` from the magic link or `{ email, otp }`.
+   * Signs the user in on success — they just proved control of the inbox,
+   * so asking for the password again would be pure friction.
    */
-  async verifyEmail(payload) {
+  async verifyEmail(payload, context = {}) {
     const { record } = await resolveOneTimeCredential(
       payload,
       TOKEN_TYPES.EMAIL_VERIFICATION,
@@ -388,7 +390,9 @@ const authService = {
     await userRepository.awardBadge(user.id, 'early-adopter').catch(() => {});
     mailService.sendWelcomeEmail(user).catch(() => {});
 
-    return { user: await loadProfile(user), verified: true };
+    const tokens = await issueTokens(user, context);
+
+    return { user: await loadProfile(user), tokens, verified: true };
   },
 
   /** Re-sends the verification email. Always reports success. */

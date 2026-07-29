@@ -5,7 +5,7 @@
  * Dark aubergine glass against the warm canvas — high contrast, quiet chrome —
  * so the notice feels carved from the brand rather than bolted on.
  *
- *  - top-center, below the nav
+ *  - top-right, below the nav
  *  - auto-dismiss with a hairline progress track (pauses on hover/focus)
  *  - errors persist until dismissed
  *  - `role="alert"` for errors, `role="status"` otherwise
@@ -54,10 +54,10 @@ const ToastContext = createContext<ToastContextValue | null>(null);
  * that truly must persist passes `duration: 0` explicitly.
  */
 const DEFAULT_DURATION: Record<ToastTone, number> = {
-  success: 4800,
-  info: 5200,
-  warning: 7000,
-  error: 8000,
+  success: 3000,
+  info: 3500,
+  warning: 4500,
+  error: 5000,
 };
 
 const MAX_VISIBLE = 3;
@@ -147,7 +147,7 @@ const ease = [0.22, 1, 0.36, 1] as const;
 function ToastViewport({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: string) => void }) {
   return (
     <div
-      className="pointer-events-none fixed inset-x-0 top-0 z-[200] flex flex-col items-center gap-3 px-4 pb-4 pt-[4.75rem] sm:px-6 sm:pt-[5.25rem]"
+      className="pointer-events-none fixed right-0 top-0 z-[200] flex w-full max-w-[420px] flex-col items-end gap-3 px-4 pb-4 pt-[4.75rem] sm:px-6 sm:pt-[5.25rem]"
       aria-live="polite"
     >
       <AnimatePresence initial={false} mode="popLayout">
@@ -182,17 +182,17 @@ function ToastCard({ toast, onDismiss }: { toast: Toast; onDismiss: (id: string)
       initial={
         reduced
           ? { opacity: 0 }
-          : { opacity: 0, y: -14, filter: 'blur(6px)' }
+          : { opacity: 0, x: 18, filter: 'blur(6px)' }
       }
       animate={
         reduced
           ? { opacity: 1 }
-          : { opacity: 1, y: 0, filter: 'blur(0px)' }
+          : { opacity: 1, x: 0, filter: 'blur(0px)' }
       }
       exit={
         reduced
           ? { opacity: 0 }
-          : { opacity: 0, y: -8, filter: 'blur(4px)', transition: { duration: 0.22 } }
+          : { opacity: 0, x: 14, filter: 'blur(4px)', transition: { duration: 0.22 } }
       }
       transition={{ duration: 0.45, ease }}
       role={toast.tone === 'error' ? 'alert' : 'status'}
@@ -218,7 +218,7 @@ function ToastCard({ toast, onDismiss }: { toast: Toast; onDismiss: (id: string)
         aria-hidden
       />
 
-      <div className="relative flex items-start gap-3.5 px-4 py-3.5 sm:px-[1.125rem] sm:py-4">
+      <div className="relative flex items-start gap-3.5 px-4 py-2.5 sm:px-[1.125rem] sm:py-3">
         <span
           className={cn(
             'mt-px flex h-[1.375rem] w-[1.375rem] shrink-0 items-center justify-center',
@@ -234,11 +234,11 @@ function ToastCard({ toast, onDismiss }: { toast: Toast; onDismiss: (id: string)
             {toast.title}
           </p>
           {toast.message ? (
-            <p className="mt-1 text-[0.8125rem] leading-relaxed text-canvas/65">{toast.message}</p>
+            <p className="mt-0.5 text-[0.8125rem] leading-snug text-canvas/65">{toast.message}</p>
           ) : null}
 
           {toast.action ? (
-            <div className="mt-2.5">
+            <div className="mt-1.5">
               {toast.action.to ? (
                 <Link
                   to={toast.action.to}

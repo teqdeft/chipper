@@ -45,8 +45,10 @@ export default function VerifyEmailPage() {
     try {
       await authApi.verifyEmail({ email, otp: code });
       setStatus('verified');
+      // The verify response signed us in — hydrate the session before moving on.
       await refresh();
-      setTimeout(() => navigate('/login', { replace: true, state: { verified: true } }), 1200);
+      toast.success('Welcome to Chipper', 'Your account is ready — start exploring designs.');
+      setTimeout(() => navigate('/designs', { replace: true }), 1200);
     } catch (err) {
       const described = describeError(err);
       setStatus('idle');
@@ -72,7 +74,7 @@ export default function VerifyEmailPage() {
         if (cancelled) return;
         setStatus('verified');
         await refresh();
-        setTimeout(() => navigate('/login', { replace: true, state: { verified: true } }), 1200);
+        setTimeout(() => navigate('/designs', { replace: true }), 1200);
       } catch (err) {
         if (cancelled) return;
         const described = describeError(err);
@@ -133,7 +135,7 @@ export default function VerifyEmailPage() {
             Your email is confirmed
           </h1>
           <p className="mt-3 text-sm leading-relaxed text-ink-70">
-            Your account is active. Taking you to sign in…
+            Your account is active and you are signed in. Taking you to the designs…
           </p>
         </Reveal>
       </div>

@@ -63,7 +63,8 @@ const authController = {
   }),
 
   verifyEmail: asyncHandler(async (req, res) => {
-    const result = await authService.verifyEmail(req.body);
+    const result = await authService.verifyEmail(req.body, contextOf(req));
+    setRefreshCookie(res, result.tokens);
     return ApiResponse.success(res, { data: result, message: 'Email address confirmed' });
   }),
 

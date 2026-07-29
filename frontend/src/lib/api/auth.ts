@@ -40,11 +40,14 @@ export const authApi = {
     return data;
   },
 
-  /** SCR-013 — confirm with the emailed code, or the magic-link token. */
+  /** SCR-013 — confirm with the emailed code, or the magic-link token. Signs the user in. */
   async verifyEmail(input: { email: string; otp: string } | { token: string }) {
-    const { data } = await api.post<{ user: AuthUser; verified: boolean }>('/auth/verify-email', input, {
-      skipAuth: true,
-    });
+    const { data } = await api.post<{ user: AuthUser; tokens: AuthTokens | null; verified: boolean }>(
+      '/auth/verify-email',
+      input,
+      { skipAuth: true },
+    );
+    if (data.tokens) tokenStore.set(data.tokens);
     return data;
   },
 

@@ -20,7 +20,7 @@ Screens: SCR-009 Register · SCR-010 Login · SCR-011/012 Password reset · SCR-
 | POST | `/auth/login` | Guest | Sign in, returns access + refresh tokens | CHIP-002 |
 | POST | `/auth/refresh` | Guest | Rotate the refresh token | CHIP-002 |
 | POST | `/auth/logout` | Guest | Revoke this session (`allDevices: true` for all) | CHIP-002 |
-| POST | `/auth/verify-email` | Guest | Confirm the address, activate the account | CHIP-001 |
+| POST | `/auth/verify-email` | Guest | Confirm the address, activate the account, sign the user in | CHIP-001 |
 | POST | `/auth/resend-verification` | Guest | Re-send the confirmation code | CHIP-001 |
 | POST | `/auth/forgot-password` | Guest | Request a reset code | CHIP-003 |
 | POST | `/auth/reset-password` | Guest | Set a new password from the code | CHIP-003 |
