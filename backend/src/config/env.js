@@ -43,28 +43,33 @@ function resolveEnvFile() {
 
 const envFile = resolveEnvFile();
 
-if (!fs.existsSync(envFile)) {
+// Serverless / container platforms (Vercel, Docker, CI) inject configuration
+// straight into process.env and ship no env file. A missing file is therefore
+// not fatal — config/index.js still validates the merged environment and
+// refuses to boot when required values are absent.
+let parsed = {};
+
+if (fs.existsSync(envFile)) {
+  const result = dotenv.config({ path: envFile });
+  if (result.error) {
+    // eslint-disable-next-line no-console
+    console.error(`[env] Failed to parse ${envFile}:`, result.error.message);
+    process.exit(1);
+  }
+  parsed = result.parsed || {};
+} else {
   // eslint-disable-next-line no-console
-  console.error(
-    `[env] Environment file not found: ${envFile}\n` +
-      `      Copy .env.example to ${path.basename(envFile)} and fill in the values.`,
+  console.warn(
+    `[env] ${path.basename(envFile)} not found — using process env only ` +
+      '(expected on platforms that inject env vars directly).',
   );
-  process.exit(1);
-}
-
-const result = dotenv.config({ path: envFile });
-
-if (result.error) {
-  // eslint-disable-next-line no-console
-  console.error(`[env] Failed to parse ${envFile}:`, result.error.message);
-  process.exit(1);
 }
 
 // NODE_ENV inside the file is authoritative only when it was not already set by the script.
-process.env.NODE_ENV = process.env.NODE_ENV || result.parsed.NODE_ENV || 'development';
+process.env.NODE_ENV = process.env.NODE_ENV || parsed.NODE_ENV || 'development';
 
 module.exports = {
   ROOT_DIR,
   envFile,
-  loadedKeys: Object.keys(result.parsed || {}),
+  loadedKeys: Object.keys(parsed),
 };
