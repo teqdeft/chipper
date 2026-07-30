@@ -22,7 +22,7 @@ exports.up = async function up(knex) {
     t.string('password_hash', 255).nullable();
     t.integer('role_id').unsigned().notNullable().references('id').inTable('roles').onDelete('RESTRICT');
     t.string('affiliation', 190).nullable().comment('Institute / company');
-    t.string('account_type', 32).nullable().comment('academic | industry | student | other');
+    t.string('account_type', 32).nullable().comment('student | researcher | institution | other');
     t.string('country', 80).nullable();
     t.string('website', 255).nullable();
     t.string('orcid', 32).nullable();

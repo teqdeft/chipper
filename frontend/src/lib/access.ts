@@ -27,6 +27,17 @@ export const ROLE_LABEL: Record<Role, string> = {
   admin: 'Admin',
 };
 
+/**
+ * Every role name an account effectively holds, for display.
+ *
+ * `user` and `uploader` grant an identical permission set on the backend, so a
+ * signed-up member genuinely holds both and a profile should say so rather than
+ * naming just the one stored in the row. Staff roles are shown on their own.
+ */
+export function rolesHeldBy(role: Role): Role[] {
+  return role === 'uploader' ? ['user', 'uploader'] : [role];
+}
+
 /** What a screen requires. `undefined` fields mean "no constraint". */
 export type ScreenAccess = {
   /** Screen ID from the inventory — kept so a route traces back to the doc. */
@@ -86,6 +97,12 @@ export const SCREEN_ACCESS = defineScreens({
 
   // ── Forum — reading is public, posting is User+ (SCR-027) ─────────────
   'forum/new': { id: 'SCR-027', label: 'Ask a question', auth: true, permissions: ['forum.post'], verified: true },
+
+  // ── Member directory ──────────────────────────────────────────────────
+  // Not in the original screen inventory: individual profiles (SCR-016) are
+  // public, but searching the whole membership is a members-only benefit —
+  // otherwise it is a scrapeable list of every researcher and their employer.
+  members: { id: 'SCR-016a', label: 'Find members', auth: true },
 
   // ── Messaging & notifications (SCR-029..031 · User+) ──────────────────
   messages: { id: 'SCR-029', label: 'Inbox', auth: true, permissions: ['message.send'] },

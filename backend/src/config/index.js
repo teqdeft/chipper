@@ -63,6 +63,10 @@ const schema = Joi.object({
   AUTH_RATE_LIMIT_MAX: Joi.number().default(20),
   UPLOAD_RATE_LIMIT_WINDOW_MINUTES: Joi.number().default(60),
   UPLOAD_RATE_LIMIT_MAX: Joi.number().default(50),
+  EMAIL_RATE_LIMIT_WINDOW_MINUTES: Joi.number().default(60),
+  // Forgot-password / resend-verification. Dev defaults higher so local OTP
+  // testing is not blocked after a handful of tries.
+  EMAIL_RATE_LIMIT_MAX: Joi.number().default(30),
 
   UPLOAD_DIR: Joi.string().default('uploads'),
   UPLOAD_PUBLIC_PATH: Joi.string().default('/static/uploads'),
@@ -188,6 +192,10 @@ const config = {
     upload: {
       windowMs: env.UPLOAD_RATE_LIMIT_WINDOW_MINUTES * 60 * 1000,
       max: env.UPLOAD_RATE_LIMIT_MAX,
+    },
+    email: {
+      windowMs: env.EMAIL_RATE_LIMIT_WINDOW_MINUTES * 60 * 1000,
+      max: env.EMAIL_RATE_LIMIT_MAX,
     },
   },
 

@@ -1,7 +1,7 @@
 /**
  * Profile and account endpoints (SCR-014, SCR-015, SCR-016).
  */
-import { api } from './client';
+import { api, toQuery } from './client';
 import type { AuthUser } from './types';
 
 export type UserSettings = {
@@ -35,6 +35,35 @@ export type RecentDesign = {
   publishedAt: string | null;
 };
 
+/** A person listed on an institution's profile. */
+export type MemberCard = {
+  id: number;
+  uuid: string;
+  handle: string;
+  name: string;
+  accountType: string | null;
+  affiliation: string | null;
+  avatarUrl: string | null;
+  uploads: number;
+  reputation: number;
+};
+
+/** The institution a member named, when it holds an account here. */
+export type InstitutionRef = {
+  name: string;
+  handle: string;
+  avatarUrl: string | null;
+};
+
+/** Earned badge as shown on a public profile. */
+export type ProfileBadge = {
+  slug: string;
+  name: string;
+  description: string | null;
+  tone: string;
+  awardedAt: string | null;
+};
+
 /** SCR-016 — what any visitor sees on a member's page. */
 export type PublicProfile = Pick<
   AuthUser,
@@ -58,16 +87,44 @@ export type PublicProfile = Pick<
   | 'joinedAt'
 > & {
   email?: string;
+  badgeDetails?: ProfileBadge[];
   stats: ProfileStats;
   recentDesigns: RecentDesign[];
+  /** Institution accounts only — null on a person's page. */
+  members: { total: number; items: MemberCard[] } | null;
+  /** Set on a person's page when their affiliation has an account here. */
+  institution: InstitutionRef | null;
   isSelf: boolean;
+};
+
+/**
+ * A row in the member directory. The endpoint is signed-in only and never
+ * returns email addresses, so this is the same shape as a public profile header
+ * minus the heavy parts.
+ */
+export type MemberSummary = Pick<
+  AuthUser,
+  | 'id'
+  | 'uuid'
+  | 'handle'
+  | 'name'
+  | 'affiliation'
+  | 'accountType'
+  | 'country'
+  | 'avatarUrl'
+  | 'role'
+  | 'reputation'
+  | 'uploads'
+> & {
+  expertise: string[];
+  badges: string[];
 };
 
 export type UpdateProfilePayload = {
   name?: string;
   handle?: string;
   affiliation?: string | null;
-  accountType?: 'academic' | 'industry' | 'student' | 'other' | null;
+  accountType?: 'student' | 'researcher' | 'institution' | null;
   country?: string | null;
   website?: string | null;
   orcid?: string | null;
@@ -76,6 +133,25 @@ export type UpdateProfilePayload = {
 };
 
 export const userApi = {
+  /**
+   * Member directory search. Signed-in only, and it never surfaces members who
+   * have hidden their profile — both enforced by the API.
+   */
+  list(
+    params: {
+      search?: string;
+      role?: string;
+      accountType?: 'student' | 'researcher' | 'institution';
+      page?: number;
+      limit?: number;
+    } = {},
+  ) {
+    return api.get<MemberSummary[]>(`/users${toQuery(params)}`).then((r) => ({
+      items: r.data ?? [],
+      pagination: r.meta?.pagination,
+    }));
+  },
+
   /** SCR-014 — own profile, including settings and permissions. */
   me() {
     return api.get<{ user: AuthUser }>('/users/me').then((r) => r.data.user);

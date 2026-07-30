@@ -46,7 +46,16 @@ const P = Object.freeze({
   LISTING_MANAGE: 'listing.manage',
 });
 
-const USER_PERMISSIONS = [
+/**
+ * What every verified member can do, whatever they signed up as (student,
+ * researcher or institution): browse, download, comment, ask, reply, vote and
+ * publish their own designs.
+ *
+ * `user` and `uploader` grant exactly this same set — a new account holds both.
+ * The two names are kept apart only because existing rows reference them and
+ * because a moderator may still want to name one when demoting someone.
+ */
+const MEMBER_PERMISSIONS = [
   P.COMMENT_CREATE,
   P.COMMENT_UPDATE_OWN,
   P.FORUM_POST,
@@ -54,15 +63,14 @@ const USER_PERMISSIONS = [
   P.MESSAGE_SEND,
   P.REPORT_CREATE,
   P.DESIGN_DOWNLOAD,
-];
-
-const UPLOADER_PERMISSIONS = [
-  ...USER_PERMISSIONS,
   P.DESIGN_CREATE,
   P.DESIGN_UPDATE_OWN,
   P.DESIGN_DELETE_OWN,
   P.DESIGN_PUBLISH,
 ];
+
+const USER_PERMISSIONS = MEMBER_PERMISSIONS;
+const UPLOADER_PERMISSIONS = MEMBER_PERMISSIONS;
 
 const COMMERCIAL_PERMISSIONS = [...UPLOADER_PERMISSIONS, P.LISTING_MANAGE];
 

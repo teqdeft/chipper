@@ -24,6 +24,7 @@ import VerifyEmailPage from '@/pages/auth/VerifyEmailPage';
 import ProfileEditPage from '@/pages/settings/ProfileEditPage';
 import AccountSettingsPage from '@/pages/settings/AccountSettingsPage';
 import PublicProfilePage from '@/pages/settings/PublicProfilePage';
+import MembersPage from '@/pages/members/MembersPage';
 import DesignsBrowsePage from '@/pages/designs/DesignsBrowsePage';
 import DesignDetailPage from '@/pages/designs/DesignDetailPage';
 import DesignViewerPage from '@/pages/designs/DesignViewerPage';
@@ -143,6 +144,11 @@ export default function App() {
                 </Route>
                 <Route element={<RequireAccess screen="settings/account" />}>
                   <Route path="settings/account" element={<AccountSettingsPage />} />
+                </Route>
+
+                {/* Member directory — signed-in only, unlike the profiles it links to */}
+                <Route element={<RequireAccess screen="members" />}>
+                  <Route path="members" element={<MembersPage />} />
                 </Route>
 
                 {/* SCR-016 — public profile, all roles */}

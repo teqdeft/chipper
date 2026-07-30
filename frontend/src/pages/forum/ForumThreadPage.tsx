@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { PageHeader } from '@/components/ui/app/PageHeader';
 import { EmptyState } from '@/components/ui/app/EmptyState';
 import { StatusBadge } from '@/components/ui/app/StatusBadge';
 import { FieldShell, TextTextarea } from '@/components/ui/app/FormField';
 import { Reveal, RevealGroup, RevealItem } from '@/components/ui/Reveal';
+import { useAuth } from '@/app/providers/AuthProvider';
 import { mockThreads } from '@/lib/mock';
 import { cn } from '@/lib/utils';
 
@@ -72,12 +73,18 @@ const mockPosts: Record<string, MockPost[]> = {
 /** SCR-026 — Forum thread with posts, reply, votes. */
 export default function ForumThreadPage() {
   const { id } = useParams<{ id: string }>();
+  const { isAuthenticated, hasPermission } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
   const thread = mockThreads.find((t) => t.id === id);
   const posts = id ? mockPosts[id] ?? [] : [];
   const [reply, setReply] = useState('');
   const [votes, setVotes] = useState<Record<string, number>>(() =>
     Object.fromEntries(posts.map((p) => [p.id, p.votes])),
   );
+
+  const canReply = isAuthenticated && hasPermission('forum.post');
+  const canVote = isAuthenticated && hasPermission('forum.vote');
 
   if (!thread) {
     return (
@@ -95,6 +102,11 @@ export default function ForumThreadPage() {
   }
 
   const bumpVote = (postId: string, delta: number) => {
+    // Guests are funnelled to sign-in and come back to this thread afterwards.
+    if (!canVote) {
+      navigate('/login', { state: { from: location } });
+      return;
+    }
     setVotes((prev) => ({ ...prev, [postId]: (prev[postId] ?? 0) + delta }));
   };
 
@@ -168,7 +180,31 @@ export default function ForumThreadPage() {
         ))}
       </RevealGroup>
 
-      {thread.status !== 'locked' ? (
+      {thread.status === 'locked' ? (
+        <Reveal delay={0.1}>
+          <p className="rounded-[16px] border border-line bg-periwinkle-tint/40 px-4 py-3 text-sm text-ink-55">
+            This thread is locked. New replies are disabled.
+          </p>
+        </Reveal>
+      ) : !canReply ? (
+        <Reveal delay={0.1}>
+          <div className="card p-5 sm:p-6">
+            <h2 className="font-display text-base font-bold text-aubergine">Join the conversation</h2>
+            <p className="mt-2 text-sm leading-relaxed text-ink-70">
+              You need an account to reply, vote and ask questions. Browsing stays free — sign in to
+              take part.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <Link to="/login" state={{ from: location }} className="btn-primary text-sm">
+                Sign in to reply
+              </Link>
+              <Link to="/register" className="btn-ghost text-sm">
+                Create an account
+              </Link>
+            </div>
+          </div>
+        </Reveal>
+      ) : (
         <Reveal delay={0.1}>
           <form
             className="card p-5 sm:p-6"
@@ -194,12 +230,6 @@ export default function ForumThreadPage() {
             </button>
           </div>
           </form>
-        </Reveal>
-      ) : (
-        <Reveal delay={0.1}>
-          <p className="rounded-[16px] border border-line bg-periwinkle-tint/40 px-4 py-3 text-sm text-ink-55">
-            This thread is locked. New replies are disabled.
-          </p>
         </Reveal>
       )}
     </div>

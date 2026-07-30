@@ -1,19 +1,26 @@
 import { useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import { PageHeader } from '@/components/ui/app/PageHeader';
 import { EmptyState } from '@/components/ui/app/EmptyState';
 import { StatusBadge } from '@/components/ui/app/StatusBadge';
 import { Reveal } from '@/components/ui/Reveal';
+import { useAuth } from '@/app/providers/AuthProvider';
 import { mockDesigns } from '@/lib/mock';
 import { cn } from '@/lib/utils';
 
+/**
+ * SCR-020 — Download gate. The route is wrapped in RequireAccess("designs/download"),
+ * so normally only signed-in accounts holding `design.download` land here; the
+ * sign-in block below is a fallback for direct navigation edge cases.
+ */
 export default function DownloadGatePage() {
   const { id } = useParams<{ id: string }>();
-  const [searchParams] = useSearchParams();
-  const [loggedIn, setLoggedIn] = useState(searchParams.get('loggedIn') === '1');
+  const { user, isAuthenticated, hasPermission } = useAuth();
+  const location = useLocation();
   const [confirmed, setConfirmed] = useState(false);
 
   const design = mockDesigns.find((d) => d.id === id);
+  const canDownload = isAuthenticated && hasPermission('design.download');
 
   if (!design) {
     return (
@@ -51,30 +58,14 @@ export default function DownloadGatePage() {
           and will cite the author when reusing this design in publications.
         </p>
 
-        <label className="mt-6 flex cursor-pointer items-center gap-3 rounded-field border border-line bg-periwinkle-tint/30 px-4 py-3">
-          <input
-            type="checkbox"
-            checked={loggedIn}
-            onChange={(e) => {
-              setLoggedIn(e.target.checked);
-              setConfirmed(false);
-            }}
-            className="h-4 w-4 accent-coral"
-          />
-          <span className="text-sm">
-            <span className="font-semibold text-aubergine">Simulate logged-in state</span>
-            <span className="mt-0.5 block text-ink-55">Toggle to preview the signed-in download flow</span>
-          </span>
-        </label>
-
-        {!loggedIn ? (
+        {!canDownload ? (
           <div className="mt-6 rounded-field border border-dashed border-line-strong bg-canvas px-5 py-8 text-center">
             <h2 className="font-display text-lg font-bold text-aubergine">Sign in required</h2>
             <p className="mx-auto mt-2 max-w-sm text-sm text-ink-70">
               You need a Chipper account to download designs. Sign in to accept the licence and start your download.
             </p>
             <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
-              <Link to="/login" className="btn-primary">
+              <Link to="/login" state={{ from: location }} className="btn-primary">
                 Sign in
               </Link>
               <Link to={`/designs/${design.id}`} className="btn-ghost">
@@ -87,7 +78,7 @@ export default function DownloadGatePage() {
             <div className="rounded-field border border-line bg-canvas p-4">
               <p className="text-sm font-semibold text-aubergine">Ready to download</p>
               <p className="mt-1 text-sm text-ink-70">
-                Signed in as <span className="font-semibold">Dr. M. van der Berg</span>. Package includes STL, STEP
+                Signed in as <span className="font-semibold">{user?.name}</span>. Package includes STL, STEP
                 and metadata for {design.version}.
               </p>
             </div>

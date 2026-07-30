@@ -123,6 +123,7 @@ const messageService = {
         with: row.is_system ? 'Moderation' : participants.map((p) => p.name).join(', ') || 'Unknown',
         participants,
         preview: row.last_body ? String(row.last_body).slice(0, 160) : '',
+        previewFromMe: Number(row.last_sender_id) === Number(userId),
         unread: Number(row.unread_count) || 0,
         muted: Boolean(row.is_muted),
         isSystem: Boolean(row.is_system),
@@ -147,7 +148,9 @@ const messageService = {
 
   /** SCR-030 — a thread; reading it clears the unread badge. */
   async getConversation(conversationId, userId, query = {}) {
-    const { conversation } = await assertParticipant(conversationId, userId);
+    const { conversation, membership } = await assertParticipant(conversationId, userId);
+    // Chat loads the newest page first, then reverses to chronological order
+    // so the composer always sits under the latest message.
     const { page, limit } = getPagination({ ...query, limit: query.limit || 50 });
 
     const base = db('messages')
@@ -159,11 +162,16 @@ const messageService = {
         'sender.name as sender_name',
         'sender.handle as sender_handle',
         'sender.avatar_path as sender_avatar_path',
-      )
-      .orderBy('messages.created_at', 'asc');
+      );
 
     const [{ total }] = await base.clone().clearSelect().clearOrder().count({ total: 'messages.id' });
-    const rows = await base.limit(limit).offset((page - 1) * limit);
+    const rows = (
+      await base
+        .clone()
+        .orderBy('messages.created_at', 'desc')
+        .limit(limit)
+        .offset((page - 1) * limit)
+    ).reverse();
 
     const attachments = rows.length
       ? await db('message_attachments').whereIn('message_id', rows.map((r) => r.id)).select('*')
@@ -186,6 +194,7 @@ const messageService = {
         numericId: conversation.id,
         subject: conversation.subject,
         isSystem: Boolean(conversation.is_system),
+        isArchived: Boolean(membership.is_archived),
         participants: participants.map((p) => ({
           id: p.id,
           name: p.name,

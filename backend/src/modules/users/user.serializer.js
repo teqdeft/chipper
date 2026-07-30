@@ -28,7 +28,15 @@ function toPublicUser(user, { badges = [], expertise = [], settings } = {}) {
     reputation: Number(user.reputation) || 0,
     uploads: Number(user.upload_count) || 0,
     badges: badges.map((b) => (typeof b === 'string' ? b : b.name)),
-    badgeDetails: badges.filter((b) => typeof b !== 'string'),
+    badgeDetails: badges
+      .filter((b) => typeof b !== 'string')
+      .map((b) => ({
+        slug: b.slug,
+        name: b.name,
+        description: b.description || null,
+        tone: b.tone || 'ink',
+        awardedAt: b.awarded_at || null,
+      })),
     expertise,
     // Email is exposed only when the member opted in.
     ...(settings && settings.show_email ? { email: user.email } : {}),
@@ -75,6 +83,35 @@ function toAdminUser(user) {
   };
 }
 
+/**
+ * Compact row for the member list on an institution's profile — enough to
+ * render a card and link to the full page, nothing more.
+ */
+function toMemberCard(user) {
+  if (!user) return null;
+  return {
+    id: user.id,
+    uuid: user.uuid,
+    handle: user.handle,
+    name: user.name,
+    accountType: user.account_type || null,
+    affiliation: user.affiliation || null,
+    avatarUrl: publicUrlFor(user.avatar_path),
+    uploads: Number(user.upload_count) || 0,
+    reputation: Number(user.reputation) || 0,
+  };
+}
+
+/** The institution a member is affiliated with, when it holds an account here. */
+function toInstitutionRef(row) {
+  if (!row) return null;
+  return {
+    name: row.name,
+    handle: row.handle,
+    avatarUrl: publicUrlFor(row.avatar_path),
+  };
+}
+
 /** Compact author block embedded in designs, comments, posts and messages. */
 function toAuthorRef(row, prefix = 'author_') {
   if (!row || !row[`${prefix}id`]) return null;
@@ -102,4 +139,12 @@ function toSettings(settings) {
   };
 }
 
-module.exports = { toPublicUser, toPrivateUser, toAdminUser, toAuthorRef, toSettings };
+module.exports = {
+  toPublicUser,
+  toPrivateUser,
+  toAdminUser,
+  toAuthorRef,
+  toMemberCard,
+  toInstitutionRef,
+  toSettings,
+};

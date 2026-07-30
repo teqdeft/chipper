@@ -5,8 +5,8 @@ const { ROLES, ROLE_LEVEL } = require('../../config/constants');
 const { permissionsForRole } = require('../../config/permissions');
 
 const ROLE_ROWS = [
-  { name: ROLES.USER, label: 'User', description: 'Browse, download, comment, post and message.' },
-  { name: ROLES.UPLOADER, label: 'Uploader', description: 'Everything a user can do, plus publishing designs.' },
+  { name: ROLES.USER, label: 'User', description: 'Browse, download, comment, post, message and publish designs.' },
+  { name: ROLES.UPLOADER, label: 'Uploader', description: 'Same as user — the role every verified signup receives.' },
   { name: ROLES.COMMERCIAL, label: 'Commercial', description: 'Company account able to manage listings.' },
   { name: ROLES.MODERATOR, label: 'Moderator', description: 'Reviews flagged content and moderates the community.' },
   { name: ROLES.ADMIN, label: 'Admin', description: 'Full platform administration.' },

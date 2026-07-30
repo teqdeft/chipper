@@ -1,6 +1,9 @@
-import { Link, NavLink } from 'react-router-dom';
+import { useState } from 'react';
+import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { Logo } from '@/components/ui/Logo';
 import { AnimatedOutlet, Reveal, RevealGroup, RevealItem } from '@/components/ui/Reveal';
+import { useAuth } from '@/app/providers/AuthProvider';
+import { useToast } from '@/app/providers/ToastProvider';
 import { cn } from '@/lib/utils';
 
 const adminNav = [
@@ -14,6 +17,29 @@ const adminNav = [
 ];
 
 export default function AdminLayout() {
+  const { user, logout } = useAuth();
+  const toast = useToast();
+  const navigate = useNavigate();
+  const [isLeaving, setIsLeaving] = useState(false);
+
+  /**
+   * The console has its own entrance at /admin/login, so leaving it ends the
+   * staff session. Navigating away without signing out left the admin browsing
+   * the public site as themselves, which is not what "exit" implies.
+   */
+  async function handleExit() {
+    setIsLeaving(true);
+    const firstName = user?.name.split(' ')[0];
+    try {
+      await logout();
+      toast.success('Signed out of admin', firstName ? `See you soon, ${firstName}.` : undefined);
+    } catch {
+      // logout() clears local state even if the revoke call fails.
+      toast.info('Signed out on this device');
+    }
+    navigate('/', { replace: true });
+  }
+
   return (
     <div className="min-h-screen bg-canvas text-aubergine">
       <header className="sticky top-0 z-40 border-b border-line bg-canvas/95 backdrop-blur-md">
@@ -26,9 +52,14 @@ export default function AdminLayout() {
               Admin
             </span>
           </div>
-          <Link to="/designs" className="text-sm font-medium text-ink-70 hover:text-aubergine">
-            Exit admin
-          </Link>
+          <button
+            type="button"
+            onClick={handleExit}
+            disabled={isLeaving}
+            className="text-sm font-medium text-ink-70 transition-colors hover:text-aubergine disabled:opacity-60"
+          >
+            {isLeaving ? 'Signing out…' : 'Exit admin'}
+          </button>
         </div>
       </header>
 

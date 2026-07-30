@@ -9,18 +9,12 @@ import {
 } from 'framer-motion';
 import { Logo } from '@/components/ui/Logo';
 import { nav, site } from '@/lib/content';
-import { cn } from '@/lib/utils';
+import { cn, initialsOf } from '@/lib/utils';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { useToast } from '@/app/providers/ToastProvider';
 import { canAccess, ROLE_LABEL } from '@/lib/access';
 import type { ScreenKey } from '@/lib/access';
-
-/** "Dr. M. van der Berg" -> "MB" for the avatar chip. */
-function initialsOf(name: string) {
-  const parts = name.replace(/^(Dr|Prof|Mr|Ms|Mrs)\.?\s+/i, '').trim().split(/\s+/);
-  const letters = parts.length > 1 ? `${parts[0][0]}${parts[parts.length - 1][0]}` : parts[0]?.slice(0, 2);
-  return (letters || '?').toUpperCase();
-}
+import { messageApi } from '@/lib/api/messages';
 
 const ease = [0.22, 1, 0.36, 1] as const;
 
@@ -74,15 +68,41 @@ function navLinkClass(isActive: boolean) {
  */
 export default function Navbar({ mode = 'marketing' }: NavbarProps) {
   const { pathname } = useLocation();
-  const { user, viewer, isAuthenticated } = useAuth();
+  // isLoading matters: until /auth/me settles, isAuthenticated is false. Without
+  // it the bar renders "Sign in" on every page load and a signed-in user watches
+  // their profile vanish and come back on each refresh.
+  const { user, viewer, isAuthenticated, isLoading: isSessionLoading } = useAuth();
   const isHome = pathname === '/';
   const [scrolled, setScrolled] = useState(mode === 'app' || !isHome);
   const [open, setOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [mobileAccountOpen, setMobileAccountOpen] = useState(false);
+  const [unreadMessages, setUnreadMessages] = useState(0);
   const reduced = useReducedMotion();
   const solid = mode === 'app' || !isHome || scrolled || open || mobileAccountOpen;
   const anyOverlay = open || mobileAccountOpen;
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setUnreadMessages(0);
+      return;
+    }
+    let cancelled = false;
+    const load = () => {
+      void messageApi
+        .unreadCount()
+        .then((count) => {
+          if (!cancelled) setUnreadMessages(count);
+        })
+        .catch(() => {});
+    };
+    load();
+    const timer = window.setInterval(load, 30000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [isAuthenticated, pathname]);
 
   useEffect(() => {
     if (mode === 'app' || !isHome) {
@@ -172,15 +192,33 @@ export default function Navbar({ mode = 'marketing' }: NavbarProps) {
         </ul>
 
         <div className="hidden items-center gap-2 md:flex lg:gap-3">
-          {isAuthenticated ? (
+          {isSessionLoading ? (
+            <div className="flex items-center gap-2" aria-hidden>
+              <span className="h-9 w-24 animate-pulse rounded-btn bg-periwinkle-tint/60" />
+              <span className="h-9 w-9 animate-pulse rounded-full bg-periwinkle-tint/60" />
+            </div>
+          ) : isAuthenticated ? (
             <>
               <Link
-                to="/messages"
+                to="/members"
                 className="flex h-10 w-10 items-center justify-center rounded-btn text-ink-70 transition-colors hover:bg-periwinkle-tint/60 hover:text-aubergine"
-                aria-label="Messages"
+                aria-label="Find members"
+                title="Find members"
+              >
+                <IconSearch />
+              </Link>
+              <Link
+                to="/messages"
+                className="relative flex h-10 w-10 items-center justify-center rounded-btn text-ink-70 transition-colors hover:bg-periwinkle-tint/60 hover:text-aubergine"
+                aria-label={unreadMessages > 0 ? `Messages, ${unreadMessages} unread` : 'Messages'}
                 title="Messages"
               >
                 <IconMail />
+                {unreadMessages > 0 ? (
+                  <span className="absolute right-1.5 top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-deep-coral px-1 text-[0.6rem] font-bold leading-none text-canvas">
+                    {unreadMessages > 9 ? '9+' : unreadMessages}
+                  </span>
+                ) : null}
               </Link>
               <Link
                 to="/notifications"
@@ -238,7 +276,9 @@ export default function Navbar({ mode = 'marketing' }: NavbarProps) {
         </div>
 
         <div className="flex items-center gap-1 md:hidden">
-          {isAuthenticated ? (
+          {isSessionLoading ? (
+            <span className="h-9 w-9 animate-pulse rounded-full bg-periwinkle-tint/60" aria-hidden />
+          ) : isAuthenticated ? (
             <button
               type="button"
               className={cn(
@@ -379,7 +419,12 @@ export default function Navbar({ mode = 'marketing' }: NavbarProps) {
                 exit={reduced ? undefined : { opacity: 0, y: 10 }}
                 transition={{ duration: 0.4, delay: reduced ? 0 : 0.28, ease }}
               >
-                {isAuthenticated ? (
+                {isSessionLoading ? (
+                  <div className="flex flex-col gap-2.5" aria-hidden>
+                    <span className="h-12 w-full animate-pulse rounded-btn bg-periwinkle-tint/60" />
+                    <span className="h-12 w-full animate-pulse rounded-btn bg-periwinkle-tint/40" />
+                  </div>
+                ) : isAuthenticated ? (
                   <div className="flex flex-col gap-3">
                     {canAccess(viewer, 'upload') ? (
                       <Link to="/upload" onClick={() => setOpen(false)} className="btn-primary w-full justify-center">
@@ -572,7 +617,7 @@ type SheetItem = {
   label: string;
   hint?: string;
   screen?: ScreenKey;
-  icon: 'mail' | 'bell' | 'upload' | 'grid' | 'user' | 'edit' | 'gear';
+  icon: 'search' | 'mail' | 'bell' | 'upload' | 'grid' | 'user' | 'edit' | 'gear';
 };
 
 /**
@@ -590,6 +635,7 @@ function MobileAccountSheet({
   const navigate = useNavigate();
 
   const primary: SheetItem[] = [
+    { to: '/members', label: 'Find members', hint: 'Search the community', screen: 'members', icon: 'search' },
     { to: '/messages', label: 'Messages', hint: 'Inbox & replies', icon: 'mail' },
     { to: '/notifications', label: 'Notifications', hint: 'Alerts & updates', icon: 'bell' },
     ...(canAccess(viewer, 'upload')
@@ -746,6 +792,7 @@ function SheetIcon({
           : 'bg-gradient-to-br from-periwinkle-tint to-[#d8dcf8] text-aubergine shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]',
       )}
     >
+      {kind === 'search' && <IconSearch />}
       {kind === 'mail' && <IconMail />}
       {kind === 'bell' && <IconBell />}
       {kind === 'upload' && <IconUpload />}
@@ -774,6 +821,7 @@ function AccountLinks({ onNavigate }: { onNavigate: () => void }) {
   // an admin route, whoever is signed in.
   const items: Array<{ to: string; label: string; screen?: ScreenKey }> = [
     { to: user ? `/u/${user.handle}` : '/login', label: 'Public profile' },
+    { to: '/members', label: 'Find members', screen: 'members' },
     { to: '/my-designs', label: 'My designs', screen: 'my-designs' },
     { to: '/settings/profile', label: 'Edit profile', screen: 'settings/profile' },
     { to: '/settings/account', label: 'Account settings', screen: 'settings/account' },
@@ -848,6 +896,15 @@ function IconClose() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
       <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function IconSearch() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <circle cx="11" cy="11" r="6" stroke="currentColor" strokeWidth="1.75" />
+      <path d="m15.5 15.5 4 4" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
     </svg>
   );
 }

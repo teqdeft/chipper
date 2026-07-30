@@ -1,6 +1,6 @@
 const Joi = require('joi');
 const c = require('../../validators/common.validator');
-const { ROLES } = require('../../config/constants');
+const { ACCOUNT_TYPES } = require('../../config/constants');
 
 module.exports = {
   register: {
@@ -13,10 +13,12 @@ module.exports = {
       }),
       handle: c.handle.optional(),
       affiliation: Joi.string().trim().max(190).allow('', null),
-      accountType: Joi.string().valid('academic', 'industry', 'student', 'other').allow('', null),
+      // Who is signing up (student / researcher / institution). Profile info only;
+      // the community role is always assigned server-side, never client-chosen.
+      accountType: Joi.string()
+        .valid(...ACCOUNT_TYPES)
+        .required(),
       country: Joi.string().trim().max(80).allow('', null),
-      // Self-service signup may only pick between the community roles.
-      role: Joi.string().valid(ROLES.USER, ROLES.UPLOADER).default(ROLES.UPLOADER),
       newsletter: Joi.boolean().default(false),
       acceptTerms: Joi.boolean().valid(true).required().messages({
         'any.only': 'You must accept the terms and conditions',

@@ -8,6 +8,7 @@
 const config = require('../../config');
 const asyncHandler = require('../../utils/asyncHandler');
 const ApiResponse = require('../../utils/ApiResponse');
+const httpStatus = require('../../utils/httpStatus');
 const authService = require('./auth.service');
 
 const REFRESH_COOKIE = 'refreshToken';
@@ -26,17 +27,32 @@ function setRefreshCookie(res, tokens) {
   if (tokens?.refreshToken) res.cookie(REFRESH_COOKIE, tokens.refreshToken, cookieOptions);
 }
 
+/**
+ * Cookie first, JSON body second.
+ *
+ * A browser updates the cookie the moment the rotation response arrives, while
+ * the copy in localStorage is only written once the page's JS runs — a reload in
+ * between leaves the body holding a token we already retired. The body stays as
+ * the fallback for native and API clients, which send no cookies.
+ */
+const refreshTokenFrom = (req) => req.cookies?.[REFRESH_COOKIE] || req.body?.refreshToken;
+
 const authController = {
   register: asyncHandler(async (req, res) => {
     const result = await authService.register(req.body, contextOf(req));
     setRefreshCookie(res, result.tokens);
 
-    return ApiResponse.created(res, {
-      data: result,
-      message: result.requiresVerification
-        ? 'Account created. Check your inbox to confirm your email address.'
-        : 'Account created successfully',
-    });
+    // 202 while the signup waits on its code: no account exists yet, so 201
+    // would be a lie. It becomes a real resource at /auth/verify-email.
+    if (result.requiresVerification) {
+      return ApiResponse.success(res, {
+        data: result,
+        statusCode: httpStatus.ACCEPTED,
+        message: 'Check your inbox — confirm your email address to create your account.',
+      });
+    }
+
+    return ApiResponse.created(res, { data: result, message: 'Account created successfully' });
   }),
 
   login: asyncHandler(async (req, res) => {
@@ -46,14 +62,14 @@ const authController = {
   }),
 
   refresh: asyncHandler(async (req, res) => {
-    const token = req.body.refreshToken || req.cookies?.[REFRESH_COOKIE];
+    const token = refreshTokenFrom(req);
     const result = await authService.refresh(token, contextOf(req));
     setRefreshCookie(res, result.tokens);
     return ApiResponse.success(res, { data: result, message: 'Session refreshed' });
   }),
 
   logout: asyncHandler(async (req, res) => {
-    const token = req.body.refreshToken || req.cookies?.[REFRESH_COOKIE];
+    const token = refreshTokenFrom(req);
     const result = await authService.logout(token, {
       allDevices: req.body.allDevices,
       userId: req.user?.id,

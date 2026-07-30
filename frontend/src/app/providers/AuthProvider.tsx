@@ -9,7 +9,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { ReactNode } from 'react';
 import { authApi } from '@/lib/api/auth';
 import type { RegisterPayload } from '@/lib/api/auth';
-import { onSessionEnded, tokenStore } from '@/lib/api/client';
+import { ApiError, onSessionEnded, tokenStore } from '@/lib/api/client';
 import type { AuthUser, Permission, Role } from '@/lib/api/types';
 import { ROLE_LEVEL } from '@/lib/access';
 import type { Viewer } from '@/lib/access';
@@ -73,21 +73,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     let cancelled = false;
 
-    hydrateSession()
-      .then((current) => {
-        if (!cancelled) setUser(current);
-      })
-      .catch(() => {
-        // An unrecoverable token is not an error the user needs to see —
-        // they simply continue as a guest.
-        if (!cancelled) {
-          tokenStore.clear();
-          setUser(null);
+    void (async () => {
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          const current = await hydrateSession();
+          if (!cancelled) setUser(current);
+          break;
+        } catch (error) {
+          // A genuine auth failure is already handled by the API client, which
+          // clears the tokens and fires onSessionEnded. Everything else — a
+          // network blip, a rate limit, a 500 — must NOT destroy a working
+          // session: discarding the tokens here signed people out for good on
+          // a single bad request, which looked like "logged out on refresh".
+          const transient =
+            error instanceof ApiError && (error.status === 0 || error.status === 429 || error.status >= 500);
+
+          if (!transient || attempt === 1) {
+            if (!cancelled) setUser(null);
+            break;
+          }
+
+          await new Promise((resolve) => setTimeout(resolve, 1200));
+          if (cancelled) return;
         }
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false);
-      });
+      }
+      if (!cancelled) setIsLoading(false);
+    })();
 
     return () => {
       cancelled = true;
@@ -125,9 +136,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const register = useCallback(async (payload: RegisterPayload) => {
     const result = await authApi.register(payload);
-    // Only a flow that skips verification returns tokens; otherwise the user
-    // stays a guest until they enter the code.
-    if (result.tokens) setUser(result.user);
+    // Only a flow that skips verification returns a user and tokens; otherwise
+    // no account exists yet and the caller stays a guest until the code is in.
+    if (result.tokens && result.user) setUser(result.user);
     return result;
   }, []);
 

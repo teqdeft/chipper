@@ -5,15 +5,18 @@
 import { api, tokenStore } from './client';
 import type { AuthTokens, AuthUser, VerificationInstructions } from './types';
 
+/** Self-declared identity at signup. Profile info only — every signup receives
+ *  the same permissions whichever one is picked. */
+export type AccountType = 'student' | 'researcher' | 'institution';
+
 export type RegisterPayload = {
   name: string;
   email: string;
   password: string;
   confirmPassword?: string;
   affiliation?: string;
-  accountType?: 'academic' | 'industry' | 'student' | 'other';
+  accountType: AccountType;
   country?: string;
-  role?: 'user' | 'uploader';
   newsletter?: boolean;
   acceptTerms: true;
 };
@@ -25,10 +28,17 @@ type AuthPayload = {
   verification?: VerificationInstructions | null;
 };
 
+/**
+ * Registering does not create the account: while `requiresVerification` is set,
+ * `user` and `tokens` are null and the account only comes into existence once
+ * `verifyEmail` succeeds.
+ */
+type RegisterResult = Omit<AuthPayload, 'user'> & { user: AuthUser | null };
+
 export const authApi = {
-  /** SCR-009 — create an account; the response says how to verify it. */
+  /** SCR-009 — start a signup; the response says how to confirm the address. */
   async register(payload: RegisterPayload) {
-    const { data } = await api.post<AuthPayload>('/auth/register', payload, { skipAuth: true });
+    const { data } = await api.post<RegisterResult>('/auth/register', payload, { skipAuth: true });
     if (data.tokens) tokenStore.set(data.tokens);
     return data;
   },

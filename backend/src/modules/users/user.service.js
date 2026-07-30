@@ -9,10 +9,14 @@ const { USER_STATUS } = require('../../config/constants');
 const { permissionsForRole } = require('../../config/permissions');
 const { removeStoredFile, describeFile } = require('../../middlewares/upload');
 const userRepository = require('./user.repository');
-const { toPublicUser, toPrivateUser, toSettings } = require('./user.serializer');
+const { identityKeysFor, identityKeysForRow } = require('./affiliation');
+const { toPublicUser, toPrivateUser, toMemberCard, toInstitutionRef, toSettings } = require('./user.serializer');
 const auditService = require('../../services/audit.service');
 
 const PROFILE_FIELDS = ['name', 'affiliation', 'account_type', 'country', 'website', 'orcid', 'bio'];
+
+/** How many affiliated members an institution page shows before "and N more". */
+const MEMBER_PREVIEW_LIMIT = 24;
 
 async function decorate(user) {
   const [badges, expertise, settings] = await Promise.all([
@@ -64,6 +68,21 @@ const userService = {
         .first(),
     ]);
 
+    // An institution page lists the members who named it — matched on its own
+    // name. Any page can also link back to the institution its affiliation
+    // names, including one institution sitting under a parent.
+    const { affiliation_key: affiliationKey, institution_key: institutionKey } = identityKeysForRow(user);
+
+    const [members, institution] = await Promise.all([
+      institutionKey
+        ? userRepository.listAffiliatedMembers(institutionKey, {
+            excludeUserId: user.id,
+            limit: MEMBER_PREVIEW_LIMIT,
+          })
+        : null,
+      userRepository.findInstitutionByKey(affiliationKey, user.id),
+    ]);
+
     const forumStats = await db('forum_posts')
       .where({ user_id: user.id, status: 'visible' })
       .whereNull('deleted_at')
@@ -94,6 +113,13 @@ const userService = {
         stars: Number(design.star_count) || 0,
         publishedAt: design.published_at,
       })),
+      // Null on a member page; an institution always gets an object, even when
+      // nobody has named it yet, so the client can tell "no members" apart from
+      // "not an institution".
+      members: members
+        ? { total: members.total, items: members.items.map(toMemberCard) }
+        : null,
+      institution: toInstitutionRef(institution),
       isSelf: Boolean(isSelf),
     };
   },
@@ -121,6 +147,19 @@ const userService = {
         handle: payload.handle,
       },
       [...PROFILE_FIELDS, 'handle'],
+    );
+
+    // Recomputed on every write, or a member who corrects their employer would
+    // stay listed under the old institution — and a renamed institution would
+    // stop matching its own people. Merged with the stored row because the keys
+    // depend on name and account type too, which may not be in this payload.
+    Object.assign(
+      updates,
+      identityKeysFor({
+        accountType: updates.account_type ?? user.account_type,
+        affiliation: 'affiliation' in updates ? updates.affiliation : user.affiliation,
+        name: updates.name ?? user.name,
+      }),
     );
 
     await db.transaction(async (trx) => {
@@ -217,6 +256,8 @@ const userService = {
           handle: `deleted.${userId}`,
           password_hash: null,
           affiliation: null,
+          affiliation_key: null,
+          institution_key: null,
           country: null,
           website: null,
           orcid: null,
@@ -244,21 +285,44 @@ const userService = {
     return { deleted: true };
   },
 
-  /** Member directory / @mention autocomplete. */
+  /** Member directory — signed-in members searching for one another. */
   async search(query) {
     const { page, limit } = getPagination(query);
     const base = userRepository
-      .searchQuery({ search: query.search, role: query.role, status: USER_STATUS.ACTIVE })
+      .searchQuery({
+        search: query.search,
+        role: query.role,
+        accountType: query.accountType || undefined,
+        status: USER_STATUS.ACTIVE,
+        publicOnly: true,
+      })
       .clone();
 
     const [{ total }] = await base.clone().clearSelect().clearOrder().count({ total: 'users.id' });
     const rows = await base
-      .orderBy('users.reputation', 'desc')
+      // Most established first, then `id` so the order is total — without it,
+      // members sharing a reputation could shuffle between pages under LIMIT.
+      .orderBy([
+        { column: 'users.reputation', order: 'desc' },
+        { column: 'users.upload_count', order: 'desc' },
+        { column: 'users.id', order: 'asc' },
+      ])
       .limit(limit)
       .offset((page - 1) * limit);
 
+    // One round-trip for expertise tags so directory cards stay informative
+    // without an N+1 per member.
+    const ids = rows.map((row) => row.id);
+    const expertiseRows = ids.length
+      ? await db('user_expertise').whereIn('user_id', ids).select('user_id', 'term')
+      : [];
+    const expertiseByUser = expertiseRows.reduce((acc, row) => {
+      (acc[row.user_id] = acc[row.user_id] || []).push(row.term);
+      return acc;
+    }, {});
+
     return {
-      items: rows.map((row) => toPublicUser(row)),
+      items: rows.map((row) => toPublicUser(row, { expertise: expertiseByUser[row.id] || [] })),
       pagination: buildPaginationMeta({ total, page, limit }),
     };
   },

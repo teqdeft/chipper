@@ -1,3 +1,4 @@
+import { forwardRef } from 'react';
 import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react';
 import { cn } from '@/lib/utils';
 
@@ -27,9 +28,13 @@ export function TextInput({ className, ...props }: InputHTMLAttributes<HTMLInput
   return <input className={cn(inputClass, className)} {...props} />;
 }
 
-export function TextTextarea({ className, ...props }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return <textarea className={cn(inputClass, 'min-h-[120px] resize-y', className)} {...props} />;
-}
+// Forwards its ref so a caller can focus it — a composer that opens on demand
+// should put the cursor in the box rather than making the user click again.
+export const TextTextarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLTextAreaElement>>(
+  function TextTextarea({ className, ...props }, ref) {
+    return <textarea ref={ref} className={cn(inputClass, 'min-h-[120px] resize-y', className)} {...props} />;
+  },
+);
 
 export function TextSelect({ className, children, ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
   return (

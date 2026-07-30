@@ -51,10 +51,10 @@ const authLimiter = rateLimit({
 /** Forgot-password / resend-verification — always keyed by IP. */
 const emailLimiter = rateLimit({
   ...base,
-  windowMs: 60 * 60 * 1000,
-  max: 5,
+  windowMs: config.rateLimit.email.windowMs,
+  max: config.isProduction ? config.rateLimit.email.max : Math.max(config.rateLimit.email.max, 100),
   keyGenerator: (req) => `ip:${req.ip}`,
-  message: 'Too many email requests. Please try again in an hour',
+  message: 'Too many email requests. Please try again later',
 });
 
 const uploadLimiter = rateLimit({

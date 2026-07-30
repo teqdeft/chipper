@@ -21,12 +21,20 @@ const { uuid, uniqueHandle } = require('../../utils/helpers');
 const { ROLES, USER_STATUS, TOKEN_TYPES } = require('../../config/constants');
 const { permissionsForRole } = require('../../config/permissions');
 const userRepository = require('../users/user.repository');
+const { identityKeysFor } = require('../users/affiliation');
 const { toPrivateUser } = require('../users/user.serializer');
 const mailService = require('../../services/mail.service');
 const auditService = require('../../services/audit.service');
 
 const MAX_FAILED_LOGINS = 8;
 const LOCK_MINUTES = 15;
+
+/**
+ * How long a just-rotated refresh token still counts as a benign race rather
+ * than theft. Long enough to cover a second tab or an interrupted page load,
+ * short enough that a genuinely stolen token is still caught on replay.
+ */
+const REFRESH_REUSE_GRACE_SECONDS = 60;
 
 /**
  * Issues a one-time credential pair for an email flow.
@@ -116,6 +124,81 @@ function devOtpPayload(otp) {
   return { devOtp: otp, devNote: 'Static OTP — remove OTP_STATIC_ENABLED once real email is set up' };
 }
 
+/**
+ * Finds the parked signup a verification request refers to, accepting either the
+ * magic-link token or an `email` + `otp` pair.
+ *
+ * Returns null when no pending signup matches at all, so the caller can fall
+ * back to the legacy `user_tokens` flow for accounts that predate this table.
+ * A pending row with the wrong code throws instead — a typo must never be
+ * reported as "no such signup".
+ */
+async function resolvePendingRegistration({ token, email, otp }) {
+  if (token) {
+    return userRepository.findPendingRegistrationByToken(jwtUtil.hashToken(token));
+  }
+  if (!email || !otp) return null;
+
+  const pending = await userRepository.findPendingRegistrationByEmail(email);
+  if (!pending) return null;
+
+  if (pending.attempts >= config.otp.maxAttempts) {
+    await userRepository.deletePendingRegistration(pending.id);
+    throw ApiError.tooManyRequests('Too many incorrect codes. Please sign up again.', {
+      code: 'OTP_ATTEMPTS_EXCEEDED',
+    });
+  }
+
+  if (pending.otp_hash !== jwtUtil.hashToken(String(otp).trim())) {
+    await userRepository.incrementPendingRegistrationAttempts(pending.id);
+    const attemptsRemaining = Math.max(config.otp.maxAttempts - (pending.attempts + 1), 0);
+    throw ApiError.badRequest('That code is not correct', {
+      code: 'OTP_INVALID',
+      details: { attemptsRemaining },
+    });
+  }
+
+  return pending;
+}
+
+/**
+ * Writes the account row and its settings.
+ *
+ * Every signup lands on the same role whatever they registered as — a student,
+ * a researcher and an institution all get the full member capability set (see
+ * config/permissions.js). Moderator and admin are only ever granted afterwards
+ * by an existing admin.
+ */
+async function createAccount(data, trx) {
+  const role = await userRepository.getRoleByName(ROLES.UPLOADER);
+  if (!role) throw ApiError.internal('Default role is missing — run the database seeds');
+
+  const userId = await userRepository.create(
+    {
+      uuid: uuid(),
+      name: data.name,
+      handle: data.handle,
+      email: data.email,
+      password_hash: data.passwordHash,
+      role_id: role.id,
+      affiliation: data.affiliation || null,
+      ...identityKeysFor(data),
+      account_type: data.accountType || null,
+      country: data.country || null,
+      status: data.status,
+      email_verified_at: data.emailVerifiedAt,
+    },
+    trx,
+  );
+
+  await trx('user_settings').insert({
+    user_id: userId,
+    notify_newsletter: Boolean(data.newsletter),
+  });
+
+  return userRepository.findByIdWithRole(userId, trx);
+}
+
 /** Issues an access + refresh pair and records the session. */
 async function issueTokens(user, context = {}, trx) {
   const sessionId = uuid();
@@ -157,7 +240,14 @@ async function loadProfile(user) {
 }
 
 const authService = {
-  /** CHIP-001 — create an account and send the verification email. */
+  /**
+   * CHIP-001 — start a signup.
+   *
+   * Nothing is written to `users` here: the details are parked in
+   * pending_registrations and the account is created only once the emailed code
+   * confirms the address (see `verifyEmail`). An address that is never confirmed
+   * therefore leaves no account behind.
+   */
   async register(payload, context = {}) {
     if (!config.features.registrationOpen) {
       throw ApiError.forbidden('Registration is currently closed', { code: 'REGISTRATION_CLOSED' });
@@ -176,80 +266,80 @@ const authService = {
       throw ApiError.conflict('This handle is already taken', { code: 'HANDLE_TAKEN' });
     }
 
-    const role = await userRepository.getRoleByName(payload.role || ROLES.UPLOADER);
-    if (!role) throw ApiError.internal('Default role is missing — run the database seeds');
+    const passwordHash = await hashPassword(payload.password);
 
-    const requireVerification = config.features.requireEmailVerification;
-
-    const { user, credentials } = await db.transaction(async (trx) => {
-      const userId = await userRepository.create(
-        {
-          uuid: uuid(),
-          name: payload.name,
-          handle,
-          email,
-          password_hash: await hashPassword(payload.password),
-          role_id: role.id,
-          affiliation: payload.affiliation || null,
-          account_type: payload.accountType || null,
-          country: payload.country || null,
-          status: requireVerification ? USER_STATUS.PENDING : USER_STATUS.ACTIVE,
-          email_verified_at: requireVerification ? null : db.fn.now(),
-        },
-        trx,
+    // Verification switched off (dev / self-hosted): the account is real at once.
+    if (!config.features.requireEmailVerification) {
+      const user = await db.transaction((trx) =>
+        createAccount(
+          {
+            name: payload.name,
+            handle,
+            email,
+            passwordHash,
+            affiliation: payload.affiliation,
+            accountType: payload.accountType,
+            country: payload.country,
+            newsletter: payload.newsletter,
+            status: USER_STATUS.ACTIVE,
+            emailVerifiedAt: db.fn.now(),
+          },
+          trx,
+        ),
       );
 
-      await trx('user_settings').insert({
-        user_id: userId,
-        notify_newsletter: Boolean(payload.newsletter),
+      mailService.sendWelcomeEmail(user).catch(() => {});
+      await auditService.log({
+        userId: user.id,
+        action: 'auth.register',
+        entityType: 'user',
+        entityId: user.id,
+        context,
       });
 
-      const issued = requireVerification
-        ? await issueOneTimeCredentials(
-            userId,
-            TOKEN_TYPES.EMAIL_VERIFICATION,
-            new Date(Date.now() + config.security.emailVerifyExpiresHours * 3600 * 1000),
-            context,
-            trx,
-          )
-        : null;
-
-      const created = await userRepository.findByIdWithRole(userId, trx);
-      return { user: created, credentials: issued };
-    });
-
-    if (credentials) {
-      mailService.sendVerificationEmail(user, credentials).catch(() => {});
-    } else {
-      mailService.sendWelcomeEmail(user).catch(() => {});
+      return {
+        user: await loadProfile(user),
+        tokens: await issueTokens(user, context),
+        requiresVerification: false,
+        verification: null,
+      };
     }
 
-    await auditService.log({
-      userId: user.id,
-      action: 'auth.register',
-      entityType: 'user',
-      entityId: user.id,
-      context,
+    await userRepository.purgeExpiredPendingRegistrations().catch(() => {});
+
+    const token = jwtUtil.randomToken();
+    const otp = config.otp.enabled ? jwtUtil.generateOtp() : null;
+
+    await userRepository.upsertPendingRegistration({
+      email,
+      name: payload.name,
+      handle,
+      password_hash: passwordHash,
+      affiliation: payload.affiliation || null,
+      account_type: payload.accountType || null,
+      country: payload.country || null,
+      newsletter: Boolean(payload.newsletter),
+      token_hash: jwtUtil.hashToken(token),
+      otp_hash: otp ? jwtUtil.hashToken(otp) : null,
+      expires_at: new Date(Date.now() + config.security.emailVerifyExpiresHours * 3600 * 1000),
+      ip_address: context.ip || null,
     });
 
-    // Verified-on-signup flows get tokens straight away; otherwise the client
-    // is told to check the inbox.
-    const tokens = requireVerification ? null : await issueTokens(user, context);
+    mailService.sendVerificationEmail({ name: payload.name, email }, { token, otp }).catch(() => {});
+    await auditService.log({ action: 'auth.register_requested', entityType: 'user', context });
 
+    // No user, no tokens — the caller is a guest until the code is entered.
     return {
-      user: await loadProfile(user),
-      tokens,
-      requiresVerification: requireVerification,
-      // Where to send the user next, and how long the code stays valid.
-      verification: requireVerification
-        ? {
-            method: config.otp.enabled ? 'otp' : 'link',
-            email: user.email,
-            otpLength: config.otp.length,
-            expiresInMinutes: config.security.emailVerifyExpiresHours * 60,
-            ...devOtpPayload(credentials?.otp),
-          }
-        : null,
+      user: null,
+      tokens: null,
+      requiresVerification: true,
+      verification: {
+        method: config.otp.enabled ? 'otp' : 'link',
+        email,
+        otpLength: config.otp.length,
+        expiresInMinutes: config.security.emailVerifyExpiresHours * 60,
+        ...devOtpPayload(otp),
+      },
     };
   },
 
@@ -259,8 +349,23 @@ const authService = {
     const invalid = ApiError.unauthorized('Email or password is incorrect', { code: 'INVALID_CREDENTIALS' });
 
     if (!user) {
-      // Equalise timing between "no such user" and "wrong password".
-      await comparePassword(password, '$2a$10$invalidinvalidinvalidinvalidinvalidinvalidinvalidinv');
+      // No account — but there may be a signup that never confirmed its address.
+      // One bcrypt comparison always runs, so the timing cannot distinguish
+      // "no such user" from "wrong password".
+      const pending = await userRepository.findPendingRegistrationByEmail(email, { includeExpired: true });
+      const matchesPending = await comparePassword(
+        password,
+        pending?.password_hash || '$2a$10$invalidinvalidinvalidinvalidinvalidinvalidinvalidinv',
+      );
+
+      // Only acknowledged once the password checks out, so the endpoint still
+      // cannot be used to discover which addresses have signed up.
+      if (pending && matchesPending) {
+        throw ApiError.forbidden('Confirm your email address to finish creating your account', {
+          code: 'EMAIL_NOT_VERIFIED',
+          details: { email: pending.email },
+        });
+      }
       throw invalid;
     }
 
@@ -321,16 +426,30 @@ const authService = {
 
     const payload = jwtUtil.verifyRefreshToken(refreshToken);
     const tokenHash = jwtUtil.hashToken(refreshToken);
-    const session = await userRepository.findRefreshToken(tokenHash);
+    let session = await userRepository.findRefreshToken(tokenHash);
 
     if (!session) {
-      // Valid signature but no live session: the token was already rotated or
-      // revoked. Treat as compromise and drop every session for the user.
-      await userRepository.revokeAllRefreshTokens(payload.sub, 'reuse_detected');
-      logger.warn(`Refresh token reuse detected for user ${payload.sub}`);
-      throw ApiError.unauthorized('This session is no longer valid. Please sign in again', {
-        code: 'SESSION_REVOKED',
-      });
+      // Valid signature but no live session. Before assuming theft, check whether
+      // this is simply a token *we* rotated moments ago: a second tab, or a
+      // reload that cut the response off before the client stored the new pair,
+      // both legitimately present the previous token. Revoking every session for
+      // that would sign the user out of everything for using the app normally.
+      const previous = await userRepository.findAnyRefreshToken(tokenHash);
+      const rotatedAt = previous?.revoked_at ? new Date(previous.revoked_at).getTime() : 0;
+      const withinGrace =
+        previous?.revoked_reason === 'rotated' &&
+        Date.now() - rotatedAt <= REFRESH_REUSE_GRACE_SECONDS * 1000;
+
+      if (!withinGrace) {
+        await userRepository.revokeAllRefreshTokens(payload.sub, 'reuse_detected');
+        logger.warn(`Refresh token reuse detected for user ${payload.sub}`);
+        throw ApiError.unauthorized('This session is no longer valid. Please sign in again', {
+          code: 'SESSION_REVOKED',
+        });
+      }
+
+      logger.debug(`Benign refresh race for user ${previous.user_id}; issuing a fresh pair`);
+      session = previous;
     }
 
     if (new Date(session.expires_at) < new Date()) {
@@ -344,6 +463,8 @@ const authService = {
     }
 
     const tokens = await db.transaction(async (trx) => {
+      // Already revoked when this is the grace path; revoking again is a no-op
+      // because the update is scoped to rows with a null revoked_at.
       await userRepository.revokeRefreshToken(session.session_id, 'rotated', trx);
       return issueTokens(user, context, trx);
     });
@@ -365,12 +486,63 @@ const authService = {
   },
 
   /**
-   * CHIP-001 — confirm an email address and activate the account.
+   * CHIP-001 — confirm the address and *create* the account.
    * Accepts either `{ token }` from the magic link or `{ email, otp }`.
-   * Signs the user in on success — they just proved control of the inbox,
+   * Signs the new member in on success — they just proved control of the inbox,
    * so asking for the password again would be pure friction.
    */
   async verifyEmail(payload, context = {}) {
+    const pending = await resolvePendingRegistration(payload);
+
+    if (pending) {
+      const user = await db.transaction(async (trx) => {
+        // Re-checked inside the transaction: the address or handle may have been
+        // claimed while the code sat unread in an inbox.
+        if (await userRepository.emailTaken(pending.email, null, trx)) {
+          throw ApiError.conflict('An account with this email address already exists', {
+            code: 'EMAIL_TAKEN',
+          });
+        }
+
+        const handle = (await userRepository.handleTaken(pending.handle, null, trx))
+          ? await uniqueHandle(pending.name, (candidate) => userRepository.handleTaken(candidate, null, trx))
+          : pending.handle;
+
+        const created = await createAccount(
+          {
+            name: pending.name,
+            handle,
+            email: pending.email,
+            passwordHash: pending.password_hash,
+            affiliation: pending.affiliation,
+            accountType: pending.account_type,
+            country: pending.country,
+            newsletter: pending.newsletter,
+            status: USER_STATUS.ACTIVE,
+            emailVerifiedAt: db.fn.now(),
+          },
+          trx,
+        );
+
+        await userRepository.deletePendingRegistration(pending.id, trx);
+        return created;
+      });
+
+      await userRepository.awardBadge(user.id, 'early-adopter').catch(() => {});
+      mailService.sendWelcomeEmail(user).catch(() => {});
+      await auditService.log({
+        userId: user.id,
+        action: 'auth.register',
+        entityType: 'user',
+        entityId: user.id,
+        context,
+      });
+
+      return { user: await loadProfile(user), tokens: await issueTokens(user, context), verified: true };
+    }
+
+    // Accounts created before pending_registrations existed still confirm the
+    // old way: the row is already in `users` and only needs activating.
     const { record } = await resolveOneTimeCredential(
       payload,
       TOKEN_TYPES.EMAIL_VERIFICATION,
@@ -397,9 +569,29 @@ const authService = {
 
   /** Re-sends the verification email. Always reports success. */
   async resendVerification(email, context = {}) {
-    const user = await userRepository.findByEmail(email);
     const generic = { sent: true, otpLength: config.otp.length };
 
+    // A signup still waiting on its code: re-arm the same row rather than making
+    // the user fill the form again. Expired rows are re-armed too.
+    const pending = await userRepository.findPendingRegistrationByEmail(email, { includeExpired: true });
+    if (pending) {
+      const token = jwtUtil.randomToken();
+      const otp = config.otp.enabled ? jwtUtil.generateOtp() : null;
+
+      await userRepository.updatePendingRegistration(pending.id, {
+        token_hash: jwtUtil.hashToken(token),
+        otp_hash: otp ? jwtUtil.hashToken(otp) : null,
+        attempts: 0,
+        expires_at: new Date(Date.now() + config.security.emailVerifyExpiresHours * 3600 * 1000),
+      });
+
+      mailService
+        .sendVerificationEmail({ name: pending.name, email: pending.email }, { token, otp })
+        .catch(() => {});
+      return { ...generic, ...devOtpPayload(otp) };
+    }
+
+    const user = await userRepository.findByEmail(email);
     if (!user || user.email_verified_at) return generic;
 
     const credentials = await db.transaction(async (trx) => {

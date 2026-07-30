@@ -15,6 +15,32 @@ function slugify(input, { maxLength = 180 } = {}) {
 }
 
 /**
+ * Reduces a free-text affiliation to a comparable key, so the "University of
+ * Twente" a student types matches the institution account of the same name:
+ * "The University of Twente." and "university of twente" both become
+ * "university of twente".
+ *
+ * Deliberately conservative — case, accents, punctuation, spacing and a leading
+ * "the" only. Anything cleverer (abbreviations, dropping "BV"/"Inc") would start
+ * merging institutions that are genuinely different.
+ *
+ * @returns {string|null} null when there is nothing left to match on.
+ */
+function normalizeAffiliation(input) {
+  const key = String(input || '')
+    .normalize('NFKD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .replace(/^the\s+/, '')
+    .replace(/\s+/g, ' ')
+    .slice(0, 190);
+  return key || null;
+}
+
+/**
  * Appends -2, -3 … until the slug is free.
  * @param {string} base
  * @param {(slug:string)=>Promise<boolean>} exists
@@ -126,6 +152,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 module.exports = {
   slugify,
+  normalizeAffiliation,
   uniqueSlug,
   uniqueHandle,
   uuid,

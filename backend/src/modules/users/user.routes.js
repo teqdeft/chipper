@@ -11,8 +11,11 @@ const { uploadLimiter, searchLimiter } = require('../../middlewares/rateLimiter'
 
 const router = express.Router();
 
-// ── Public (guest-readable) ───────────────────────────────────────────────
-router.get('/', searchLimiter, validate(validator.list), controller.list);
+// ── Member directory — signed-in only ─────────────────────────────────────
+// Browsing the membership is a members' benefit, not public data: an open
+// endpoint here is a scrapeable list of every researcher and their affiliation.
+// Individual profiles stay public at /users/:handle.
+router.get('/', authenticate, searchLimiter, validate(validator.list), controller.list);
 router.get('/mentions', authenticate, validate(validator.mentions), controller.mentions);
 
 // ── Own account ───────────────────────────────────────────────────────────

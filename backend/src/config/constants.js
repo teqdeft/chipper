@@ -22,6 +22,19 @@ const ROLE_LEVEL = Object.freeze({
   [ROLES.ADMIN]: 100,
 });
 
+/**
+ * Self-declared account type chosen at signup. Profile metadata only — every
+ * signup gets the same permissions whichever one is picked. It does decide how
+ * a profile is presented: an `institution` page lists its affiliated members.
+ */
+const ACCOUNT_TYPE = Object.freeze({
+  STUDENT: 'student',
+  RESEARCHER: 'researcher',
+  INSTITUTION: 'institution',
+});
+
+const ACCOUNT_TYPES = Object.freeze(Object.values(ACCOUNT_TYPE));
+
 const USER_STATUS = Object.freeze({
   PENDING: 'pending',
   ACTIVE: 'active',
@@ -148,6 +161,8 @@ const PAGINATION = Object.freeze({
 module.exports = {
   ROLES,
   ROLE_LEVEL,
+  ACCOUNT_TYPE,
+  ACCOUNT_TYPES,
   USER_STATUS,
   TOKEN_TYPES,
   DESIGN_STATUS,

@@ -5,7 +5,7 @@
 const BaseRepository = require('../../repositories/BaseRepository');
 const { db } = require('../../database/connection');
 const { escapeLike } = require('../../utils/helpers');
-const { USER_STATUS } = require('../../config/constants');
+const { USER_STATUS, ACCOUNT_TYPE } = require('../../config/constants');
 
 const PUBLIC_COLUMNS = [
   'users.id',
@@ -85,25 +85,43 @@ class UserRepository extends BaseRepository {
     return q.first().then(Boolean);
   }
 
-  /** Admin user list (SCR-033) with search, role/status filters. */
-  searchQuery({ search, role, status, verified } = {}, trx) {
+  /**
+   * Shared by the admin user list (SCR-033) and the member directory.
+   *
+   * @param {object} filters
+   * @param {boolean} [filters.publicOnly] narrows the query to what one member
+   *        may see of another: no email column, no matching on email, and nobody
+   *        who has hidden their profile. Leave it off for staff screens.
+   */
+  searchQuery({ search, role, status, verified, accountType, publicOnly = false } = {}, trx) {
     const q = (trx || db)('users')
       .join('roles', 'users.role_id', 'roles.id')
       .whereNull('users.deleted_at')
-      .select(...PUBLIC_COLUMNS, 'users.email', 'users.last_login_at', 'roles.name as role');
+      .select(...PUBLIC_COLUMNS, 'roles.name as role');
+
+    if (publicOnly) {
+      q.leftJoin('user_settings', 'user_settings.user_id', 'users.id')
+        // Rows predating user_settings have no preference stored; the column
+        // defaults to public, so treat a missing row the same way.
+        .where((b) => b.where('user_settings.profile_public', true).orWhereNull('user_settings.id'));
+    } else {
+      q.select('users.email', 'users.last_login_at');
+    }
 
     if (search) {
       const term = `%${escapeLike(search)}%`;
-      q.where((b) =>
-        b
-          .where('users.name', 'like', term)
+      q.where((b) => {
+        b.where('users.name', 'like', term)
           .orWhere('users.handle', 'like', term)
-          .orWhere('users.email', 'like', term)
-          .orWhere('users.affiliation', 'like', term),
-      );
+          .orWhere('users.affiliation', 'like', term);
+        // Email is searchable for staff only — matching on it in the member
+        // directory would confirm whether any given address is registered.
+        if (!publicOnly) b.orWhere('users.email', 'like', term);
+      });
     }
     if (role) q.where('roles.name', role);
     if (status) q.where('users.status', status);
+    if (accountType) q.where('users.account_type', accountType);
     if (verified === true) q.whereNotNull('users.email_verified_at');
     if (verified === false) q.whereNull('users.email_verified_at');
 
@@ -187,6 +205,15 @@ class UserRepository extends BaseRepository {
     return (trx || db)('refresh_tokens').where({ token_hash: tokenHash }).whereNull('revoked_at').first();
   }
 
+  /**
+   * Includes revoked rows, so a caller can tell "this token was rotated a moment
+   * ago" apart from "this token was never ours". Used to keep a harmless
+   * rotation race from being treated as token theft.
+   */
+  findAnyRefreshToken(tokenHash, trx) {
+    return (trx || db)('refresh_tokens').where({ token_hash: tokenHash }).first();
+  }
+
   revokeRefreshToken(sessionId, reason = 'rotated', trx) {
     return (trx || db)('refresh_tokens')
       .where({ session_id: sessionId })
@@ -257,6 +284,131 @@ class UserRepository extends BaseRepository {
       .where({ user_id: userId, type })
       .whereNull('used_at')
       .update({ used_at: db.fn.now() });
+  }
+
+  // ── Institution ↔ member links ───────────────────────────────────────────
+  // See modules/users/affiliation.js for how the key on both sides is derived.
+
+  /**
+   * Live accounts that are safe to list on someone else's page.
+   * A member who made their profile private is left out: the row would link to a
+   * page the visitor cannot open.
+   */
+  listableQuery(excludeUserId, trx) {
+    const q = (trx || db)('users')
+      .leftJoin('user_settings', 'user_settings.user_id', 'users.id')
+      .whereNull('users.deleted_at')
+      .where('users.status', USER_STATUS.ACTIVE)
+      // Rows seeded before user_settings existed have no preference recorded;
+      // the column defaults to public, so treat a missing row the same way.
+      .where((b) => b.where('user_settings.profile_public', true).orWhereNull('user_settings.id'));
+
+    if (excludeUserId) q.whereNot('users.id', excludeUserId);
+    return q;
+  }
+
+  /**
+   * The people who named this institution as their affiliation.
+   * @param {string} institutionKey the institution's own `institution_key`
+   * @returns {Promise<{ total:number, items:object[] }>}
+   */
+  async listAffiliatedMembers(institutionKey, { excludeUserId, limit = 24 } = {}, trx) {
+    if (!institutionKey) return { total: 0, items: [] };
+
+    const matching = () =>
+      this.listableQuery(excludeUserId, trx).where('users.affiliation_key', institutionKey);
+
+    const [{ total }] = await matching().count({ total: 'users.id' });
+    if (!Number(total)) return { total: 0, items: [] };
+
+    const items = await matching()
+      .select(...PUBLIC_COLUMNS)
+      // Most active first: the people a visitor is most likely looking for.
+      // `id` breaks remaining ties so the order is total — brand new members all
+      // sit on 0 uploads and 0 reputation, and an unstable sort under LIMIT
+      // would drop or repeat people between reads.
+      .orderBy([
+        { column: 'users.upload_count', order: 'desc' },
+        { column: 'users.reputation', order: 'desc' },
+        { column: 'users.name', order: 'asc' },
+        { column: 'users.id', order: 'asc' },
+      ])
+      .limit(limit);
+
+    return { total: Number(total), items };
+  }
+
+  /**
+   * The institution account a member's affiliation names, if it has one.
+   * Matched against the institution's own name, so an account merely *listing*
+   * that affiliation is never mistaken for the institution itself.
+   *
+   * Nothing stops two accounts registering the same institution name, so the
+   * oldest one wins — explicitly ordered, because an unordered `first()` lets
+   * MySQL return either row and the link would appear to flip at random.
+   * First-come-first-served also never changes once decided, unlike a rule based
+   * on reputation or uploads.
+   *
+   * @param {string} affiliationKey the member's `affiliation_key`
+   */
+  findInstitutionByKey(affiliationKey, excludeUserId, trx) {
+    if (!affiliationKey) return Promise.resolve(undefined);
+    return this.listableQuery(excludeUserId, trx)
+      .where('users.institution_key', affiliationKey)
+      .where('users.account_type', ACCOUNT_TYPE.INSTITUTION)
+      .select('users.id', 'users.name', 'users.handle', 'users.avatar_path')
+      .orderBy('users.id', 'asc')
+      .first();
+  }
+
+  // ── Pending registrations ────────────────────────────────────────────────
+  // Signups held outside `users` until the email is confirmed. See the
+  // 20260730000002 migration for why the row does not live in `users` yet.
+
+  /**
+   * Stores the signup, replacing any earlier unconfirmed attempt for the same
+   * address — someone who never received the first code simply registers again.
+   */
+  async upsertPendingRegistration(data, trx) {
+    const runner = trx || db;
+    const email = String(data.email).toLowerCase();
+    await runner('pending_registrations').where({ email }).del();
+    await runner('pending_registrations').insert({ ...data, email });
+    return runner('pending_registrations').where({ email }).first();
+  }
+
+  findPendingRegistrationByToken(tokenHash, trx) {
+    return (trx || db)('pending_registrations')
+      .where({ token_hash: tokenHash })
+      .where('expires_at', '>', db.fn.now())
+      .first();
+  }
+
+  /**
+   * @param {object} [options]
+   * @param {boolean} [options.includeExpired] resend re-arms an expired row
+   *        rather than making the user fill the form again.
+   */
+  findPendingRegistrationByEmail(email, { includeExpired = false } = {}, trx) {
+    const q = (trx || db)('pending_registrations').where({ email: String(email).toLowerCase() });
+    if (!includeExpired) q.where('expires_at', '>', db.fn.now());
+    return q.first();
+  }
+
+  incrementPendingRegistrationAttempts(id, trx) {
+    return (trx || db)('pending_registrations').where({ id }).increment('attempts', 1);
+  }
+
+  updatePendingRegistration(id, data, trx) {
+    return (trx || db)('pending_registrations').where({ id }).update(data);
+  }
+
+  deletePendingRegistration(id, trx) {
+    return (trx || db)('pending_registrations').where({ id }).del();
+  }
+
+  purgeExpiredPendingRegistrations(trx) {
+    return (trx || db)('pending_registrations').where('expires_at', '<', db.fn.now()).del();
   }
 
   // ── Stats ────────────────────────────────────────────────────────────────

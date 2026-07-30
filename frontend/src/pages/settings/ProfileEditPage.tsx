@@ -11,10 +11,9 @@ import { userApi } from '@/lib/api/users';
 import { describeError } from '@/lib/api/errors';
 
 const ACCOUNT_TYPES = [
-  { value: 'academic', label: 'Researcher / academic' },
   { value: 'student', label: 'Student' },
-  { value: 'industry', label: 'Industry' },
-  { value: 'other', label: 'Other' },
+  { value: 'researcher', label: 'Researcher' },
+  { value: 'institution', label: 'Institution / company' },
 ] as const;
 
 type FormState = {
@@ -68,6 +67,10 @@ export default function ProfileEditPage() {
       expertise: (user.expertise ?? []).join(', '),
     });
   }, [user]);
+
+  // An institution's *name* is what its members type as their affiliation, so
+  // the two text fields mean something different for it than for a person.
+  const isInstitution = form.accountType === 'institution';
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -205,7 +208,32 @@ export default function ProfileEditPage() {
               />
             ) : null}
 
-            <FieldShell label="Display name" error={fieldErrors.name}>
+            {/* Above the name and affiliation fields, because it changes what
+                both of them mean. */}
+            <FieldShell label="Account type" error={fieldErrors.accountType}>
+              <TextSelect
+                name="accountType"
+                value={form.accountType}
+                onChange={(e) => update('accountType', e.target.value)}
+              >
+                <option value="">Not specified</option>
+                {ACCOUNT_TYPES.map((type) => (
+                  <option key={type.value} value={type.value}>
+                    {type.label}
+                  </option>
+                ))}
+              </TextSelect>
+            </FieldShell>
+
+            <FieldShell
+              label={isInstitution ? 'Official name' : 'Display name'}
+              hint={
+                isInstitution
+                  ? 'Your students and researchers enter this as their affiliation, so it is how they find you.'
+                  : undefined
+              }
+              error={fieldErrors.name}
+            >
               <TextInput
                 name="name"
                 type="text"
@@ -229,29 +257,22 @@ export default function ProfileEditPage() {
               />
             </FieldShell>
 
-            <FieldShell label="Affiliation" error={fieldErrors.affiliation}>
+            <FieldShell
+              label={isInstitution ? 'Parent organisation' : 'Affiliation'}
+              hint={
+                isInstitution
+                  ? 'Optional — only if you are a faculty or department within a larger body.'
+                  : 'University, institute or company. Enter it exactly as they are known.'
+              }
+              error={fieldErrors.affiliation}
+            >
               <TextInput
                 name="affiliation"
                 type="text"
-                placeholder="University of Twente"
+                placeholder={isInstitution ? 'Usually left empty' : 'University of Twente'}
                 value={form.affiliation}
                 onChange={(e) => update('affiliation', e.target.value)}
               />
-            </FieldShell>
-
-            <FieldShell label="Account type" error={fieldErrors.accountType}>
-              <TextSelect
-                name="accountType"
-                value={form.accountType}
-                onChange={(e) => update('accountType', e.target.value)}
-              >
-                <option value="">Not specified</option>
-                {ACCOUNT_TYPES.map((type) => (
-                  <option key={type.value} value={type.value}>
-                    {type.label}
-                  </option>
-                ))}
-              </TextSelect>
             </FieldShell>
 
             <FieldShell label="Country" error={fieldErrors.country}>

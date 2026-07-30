@@ -9,10 +9,9 @@ import { useToast } from '@/app/providers/ToastProvider';
 import { describeError } from '@/lib/api/errors';
 
 const ACCOUNT_TYPES = [
-  { value: 'academic', label: 'Researcher / academic' },
   { value: 'student', label: 'Student' },
-  { value: 'industry', label: 'Industry' },
-  { value: 'other', label: 'Other' },
+  { value: 'researcher', label: 'Researcher' },
+  { value: 'institution', label: 'Institution / company' },
 ] as const;
 
 /** SCR-009 — Register (CHIP-001). */
@@ -24,7 +23,7 @@ export default function RegisterPage() {
     name: '',
     email: '',
     affiliation: '',
-    accountType: 'academic' as (typeof ACCOUNT_TYPES)[number]['value'],
+    accountType: 'researcher' as (typeof ACCOUNT_TYPES)[number]['value'],
     password: '',
     confirmPassword: '',
   });
@@ -34,6 +33,10 @@ export default function RegisterPage() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [alert, setAlert] = useState<{ title?: string; message: string; tone: 'error' | 'warning' } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  // An institution's *name* is what its members type as their affiliation, so
+  // the two text fields mean something different for it than for a person.
+  const isInstitution = form.accountType === 'institution';
 
   function update<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -71,7 +74,7 @@ export default function RegisterPage() {
       });
 
       if (result.requiresVerification) {
-        toast.success('Account created', `We sent a verification code to ${form.email}.`);
+        toast.success('Almost there', `We sent a verification code to ${form.email}.`);
         // Carry the address and (in development) the code straight to SCR-013.
         navigate('/verify-email', {
           replace: true,
@@ -118,12 +121,36 @@ export default function RegisterPage() {
             />
           ) : null}
 
-          <FieldShell label="Full name" error={fieldErrors.name}>
+          {/* Asked first: it decides what the name and affiliation fields mean. */}
+          <FieldShell label="Account type" error={fieldErrors.accountType}>
+            <TextSelect
+              name="accountType"
+              value={form.accountType}
+              onChange={(e) => update('accountType', e.target.value as typeof form.accountType)}
+              required
+            >
+              {ACCOUNT_TYPES.map((type) => (
+                <option key={type.value} value={type.value}>
+                  {type.label}
+                </option>
+              ))}
+            </TextSelect>
+          </FieldShell>
+
+          <FieldShell
+            label={isInstitution ? 'Official name' : 'Full name'}
+            hint={
+              isInstitution
+                ? 'Your students and researchers enter this as their affiliation, so it is how they find you.'
+                : undefined
+            }
+            error={fieldErrors.name}
+          >
             <TextInput
               name="name"
               type="text"
-              autoComplete="name"
-              placeholder="Dr. M. van der Berg"
+              autoComplete={isInstitution ? 'organization' : 'name'}
+              placeholder={isInstitution ? 'University of Twente' : 'Dr. M. van der Berg'}
               value={form.name}
               onChange={(e) => update('name', e.target.value)}
               required
@@ -142,29 +169,22 @@ export default function RegisterPage() {
             />
           </FieldShell>
 
-          <FieldShell label="Affiliation" hint="University, institute or company" error={fieldErrors.affiliation}>
+          <FieldShell
+            label={isInstitution ? 'Parent organisation' : 'Affiliation'}
+            hint={
+              isInstitution
+                ? 'Optional — only if you are a faculty or department within a larger body.'
+                : 'University, institute or company. Enter it exactly as they are known.'
+            }
+            error={fieldErrors.affiliation}
+          >
             <TextInput
               name="affiliation"
               type="text"
-              placeholder="University of Twente"
+              placeholder={isInstitution ? 'Usually left empty' : 'University of Twente'}
               value={form.affiliation}
               onChange={(e) => update('affiliation', e.target.value)}
             />
-          </FieldShell>
-
-          <FieldShell label="Account type" error={fieldErrors.accountType}>
-            <TextSelect
-              name="accountType"
-              value={form.accountType}
-              onChange={(e) => update('accountType', e.target.value as typeof form.accountType)}
-              required
-            >
-              {ACCOUNT_TYPES.map((type) => (
-                <option key={type.value} value={type.value}>
-                  {type.label}
-                </option>
-              ))}
-            </TextSelect>
           </FieldShell>
 
           <FieldShell label="Password" error={fieldErrors.password}>
