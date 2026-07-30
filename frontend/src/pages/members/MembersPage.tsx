@@ -4,10 +4,11 @@ import { EmptyState } from '@/components/ui/app/EmptyState';
 import { StatusBadge } from '@/components/ui/app/StatusBadge';
 import { ErrorState, LoadingState } from '@/components/ui/app/LoadingState';
 import { Pagination } from '@/components/ui/app/Pagination';
+import { Avatar } from '@/components/ui/app/Avatar';
 import { useApiResource } from '@/hooks/useApiResource';
 import { userApi } from '@/lib/api/users';
 import type { MemberSummary } from '@/lib/api/users';
-import { cn, initialsOf } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 
 const ACCOUNT_TYPE_LABEL: Record<string, string> = {
   student: 'Student',
@@ -268,19 +269,7 @@ function MemberCardLink({ member }: { member: MemberSummary }) {
       to={`/u/${member.handle}`}
       className="card group flex h-full min-h-[7.5rem] items-start gap-3 p-3.5 transition-[border-color,box-shadow] duration-300 ease-premium hover:border-line-strong hover:shadow-card-hover sm:min-h-[8rem] sm:p-4"
     >
-      <span
-        className={cn(
-          'flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden border border-line bg-periwinkle-tint text-xs font-bold text-aubergine',
-          isInstitution ? 'rounded-[9px]' : 'rounded-full',
-        )}
-        aria-hidden
-      >
-        {member.avatarUrl ? (
-          <img src={member.avatarUrl} alt="" className="h-full w-full object-cover" />
-        ) : (
-          initialsOf(member.name)
-        )}
-      </span>
+      <Avatar name={member.name} src={member.avatarUrl} className="h-10 w-10 text-xs" />
 
       <span className="flex min-h-0 min-w-0 flex-1 flex-col">
         <span className="flex items-start justify-between gap-2">
