@@ -7,7 +7,7 @@ import {
   useReducedMotion,
   type PanInfo,
 } from 'framer-motion';
-import { Logo, Logomark } from '@/components/ui/Logo';
+import { Logo } from '@/components/ui/Logo';
 import { nav, site } from '@/lib/content';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/app/providers/AuthProvider';
@@ -193,7 +193,6 @@ export default function Navbar({ mode = 'marketing' }: NavbarProps) {
               </Link>
               {canAccess(viewer, 'upload') ? (
                 <Link to="/upload" className="btn-primary !px-4 !py-2 text-sm">
-                  <Logomark className="h-3.5 w-auto" />
                   Upload
                 </Link>
               ) : null}
@@ -232,7 +231,6 @@ export default function Navbar({ mode = 'marketing' }: NavbarProps) {
                 Sign in
               </Link>
               <Link to="/register" className="btn-primary !px-4 !py-2 text-sm">
-                <Logomark className="h-3.5 w-auto" />
                 Upload a design
               </Link>
             </>
@@ -260,7 +258,7 @@ export default function Navbar({ mode = 'marketing' }: NavbarProps) {
           ) : null}
           <button
             type="button"
-            className="relative flex h-11 w-11 items-center justify-center"
+            className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-aubergine shadow-sm"
             aria-label={open ? 'Close menu' : 'Open menu'}
             aria-expanded={open}
             onClick={openMobileNav}
@@ -268,19 +266,19 @@ export default function Navbar({ mode = 'marketing' }: NavbarProps) {
             <span className="relative block h-3.5 w-5">
               <span
                 className={cn(
-                  'absolute left-0 h-[1.5px] w-5 origin-center rounded-full bg-aubergine transition-all duration-300 ease-premium',
+                  'absolute left-0 h-[1.5px] w-5 origin-center rounded-full bg-white transition-all duration-300 ease-premium',
                   open ? 'top-[6px] rotate-45' : 'top-0',
                 )}
               />
               <span
                 className={cn(
-                  'absolute left-0 top-[6px] h-[1.5px] w-5 rounded-full bg-aubergine transition-all duration-300 ease-premium',
+                  'absolute left-0 top-[6px] h-[1.5px] w-5 rounded-full bg-white transition-all duration-300 ease-premium',
                   open ? 'translate-x-1 scale-x-0 opacity-0' : 'opacity-100',
                 )}
               />
               <span
                 className={cn(
-                  'absolute left-0 h-[1.5px] w-5 origin-center rounded-full bg-aubergine transition-all duration-300 ease-premium',
+                  'absolute left-0 h-[1.5px] w-5 origin-center rounded-full bg-white transition-all duration-300 ease-premium',
                   open ? 'top-[6px] -rotate-45' : 'top-[12px]',
                 )}
               />
@@ -385,7 +383,6 @@ export default function Navbar({ mode = 'marketing' }: NavbarProps) {
                   <div className="flex flex-col gap-3">
                     {canAccess(viewer, 'upload') ? (
                       <Link to="/upload" onClick={() => setOpen(false)} className="btn-primary w-full justify-center">
-                        <Logomark className="h-3.5 w-auto" />
                         Upload a design
                       </Link>
                     ) : null}
@@ -411,7 +408,6 @@ export default function Navbar({ mode = 'marketing' }: NavbarProps) {
                 ) : (
                   <div className="flex flex-col gap-2.5">
                     <Link to="/register" onClick={() => setOpen(false)} className="btn-primary w-full justify-center">
-                      <Logomark className="h-3.5 w-auto" />
                       Upload a design
                     </Link>
                     <Link

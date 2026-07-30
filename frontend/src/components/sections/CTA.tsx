@@ -1,7 +1,6 @@
 import { Section } from '@/components/ui/Section';
 import { Reveal } from '@/components/ui/Reveal';
 import { MagneticButton } from '@/components/ui/MagneticButton';
-import { Logomark } from '@/components/ui/Logo';
 import { cta } from '@/lib/content';
 
 export default function CTA() {
@@ -28,7 +27,6 @@ export default function CTA() {
         <Reveal delay={0.15}>
           <div className="btn-row mt-8 w-full max-w-md sm:mt-10 sm:max-w-lg sm:grid-cols-2">
             <MagneticButton href={cta.primary.href} variant="primary" className="w-full">
-              <Logomark className="h-3.5 w-auto" />
               {cta.primary.label}
             </MagneticButton>
             <MagneticButton

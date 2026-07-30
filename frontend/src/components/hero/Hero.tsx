@@ -6,7 +6,6 @@ import { hero } from '@/lib/content';
 import { heroScroll } from '@/lib/heroScroll';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { MagneticButton } from '@/components/ui/MagneticButton';
-import { Logomark } from '@/components/ui/Logo';
 
 /**
  * Mobile layout follows the Apple product-page pattern (AirPods / iPhone):
@@ -239,7 +238,6 @@ export default function Hero() {
                   className="mt-6 flex w-full max-w-[17rem] flex-col items-stretch gap-2.5 md:mt-10 md:max-w-lg md:grid md:grid-cols-2 md:gap-3"
                 >
                   <MagneticButton href={hero.primaryCta.href} variant="primary" className="w-full justify-center">
-                    <Logomark className="h-3.5 w-auto" />
                     {hero.primaryCta.label}
                   </MagneticButton>
                   <MagneticButton href={hero.secondaryCta.href} variant="ghost" className="w-full justify-center">
