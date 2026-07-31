@@ -1,6 +1,6 @@
 const Joi = require('joi');
 const c = require('../../validators/common.validator');
-const { DESIGN_STATUS, PUBLISH_AS } = require('../../config/constants');
+const { DESIGN_STATUS, PUBLISH_AS, COMPONENT_TYPE } = require('../../config/constants');
 
 const identifier = Joi.string().trim().max(200).required();
 const rangeSchema = Joi.object({
@@ -41,26 +41,78 @@ const relatedDocumentSchema = Joi.object({
   fileId: c.id.allow(null),
 });
 
-/** Shared metadata body — `required` toggles the create/update difference. */
+/**
+ * Shared metadata body — `required` toggles the create/update difference.
+ *
+ * What "required" covers is the set a design cannot be catalogued without:
+ * a name, a one-line summary, a description, what the thing *is* (component +
+ * resource type), who is publishing it, what it was made of and how, and the
+ * licence a downloader is agreeing to. Everything else stays optional so an
+ * uploader is not blocked on data they may not have.
+ *
+ * A PATCH sends only what changed, so nothing is required there — but a field
+ * that IS sent may not be blanked back out; `.required()` inside the update
+ * variant is expressed as "not empty" via the same `str()` helpers below.
+ */
 const metadataBody = (required = false) => {
   const str = (max) => Joi.string().trim().max(max);
+  /** Mandatory on create, and non-empty if present on update. */
+  const core = (schema, message) => (required ? schema.required().messages({ 'any.required': message, 'string.empty': message }) : schema);
+
   return Joi.object({
-    title: required ? str(200).required() : str(200),
-    summary: str(500).allow('', null),
-    description: str(50000).allow('', null),
+    title: core(str(200).min(3), 'A design name is required'),
+    summary: core(str(500).min(10), 'A short summary is required — it is what people read on browse cards'),
+    description: core(str(50000).min(20), 'A description is required'),
 
-    componentType: required ? Joi.string().trim().max(64).required() : Joi.string().trim().max(64),
-    resourceType: Joi.string().trim().max(64).allow('', null),
+    componentType: core(Joi.string().trim().max(64), 'Choose a component type'),
+    resourceType: core(Joi.string().trim().max(64), 'Choose a resource type'),
 
-    publishAs: Joi.string().valid(...Object.values(PUBLISH_AS)),
-    instituteName: str(190).allow('', null),
+    publishAs: core(Joi.string().valid(...Object.values(PUBLISH_AS)), 'Choose who this is published as'),
+    /**
+     * Only meaningful — and only mandatory — when publishing under an institute.
+     *
+     * The `is` schema must be `.required()`: without it Joi also matches an
+     * absent `publishAs`, which would make a PATCH that only touches the title
+     * demand an institute name.
+     */
+    instituteName: Joi.when('publishAs', {
+      is: Joi.string().valid(PUBLISH_AS.INSTITUTE, PUBLISH_AS.PERSON_FROM_INSTITUTE).required(),
+      then: str(190).required().messages({
+        'any.required': 'Name the institute you are publishing under',
+        'string.empty': 'Name the institute you are publishing under',
+      }),
+      otherwise: str(190).allow('', null),
+    }),
 
-    organs: Joi.alternatives().try(Joi.array().items(Joi.string().trim().max(64)), Joi.string().trim()),
-    testedMaterial: Joi.string().trim().max(64).allow('', null),
-    testedFabricationMethod: Joi.string().trim().max(64).allow('', null),
+    // An organ chip that names no organ is not searchable by the one filter
+    // people actually use, so it is mandatory for that type only.
+    organs: Joi.when('componentType', {
+      is: Joi.string().valid(COMPONENT_TYPE.ORGAN_CHIP).required(),
+      then: Joi.alternatives()
+        .try(Joi.array().items(Joi.string().trim().max(64)).min(1), Joi.string().trim().min(1))
+        .required()
+        .messages({
+          'any.required': 'Select at least one tested organ',
+          'alternatives.match': 'Select at least one tested organ',
+        }),
+      otherwise: Joi.alternatives().try(
+        Joi.array().items(Joi.string().trim().max(64)),
+        Joi.string().trim().allow(''),
+      ),
+    }),
+    testedMaterial: core(Joi.string().trim().max(64), 'Choose the tested material'),
+    testedFabricationMethod: core(Joi.string().trim().max(64), 'Choose the tested fabrication method'),
 
-    license: Joi.string().trim().max(40).allow('', null),
-    customLicenseText: str(10000).allow('', null),
+    license: core(Joi.string().trim().max(40), 'Choose a licence'),
+    // A "Custom" licence is only a licence once its terms are written down.
+    customLicenseText: Joi.when('license', {
+      is: Joi.string().trim().insensitive().valid('custom').required(),
+      then: str(10000).required().messages({
+        'any.required': 'Custom licences need their terms written out',
+        'string.empty': 'Custom licences need their terms written out',
+      }),
+      otherwise: str(10000).allow('', null),
+    }),
     howToCite: str(2000).allow('', null),
     creditsNote: str(2000).allow('', null),
 

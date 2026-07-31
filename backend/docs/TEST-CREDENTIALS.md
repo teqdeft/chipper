@@ -163,3 +163,94 @@ npm run db:reset     # drop, re-migrate, re-seed
 ```
 
 Seeds are idempotent — re-running `npm run seed` will not duplicate these accounts.
+
+---
+
+# Production: deploying and running migrations
+
+Everything above is development. This section is the standing procedure for the live
+site (frontend + backend on Vercel, MySQL on Aiven).
+
+## Vercel never runs migrations
+
+Vercel builds and serves code. It has no idea what tables the database has, and it will
+never run `knex migrate`. The database is a separate service on the internet, so your
+machine talks to it **directly**:
+
+```
+your machine  ──  npm run migrate:prod  ──▶  Aiven MySQL
+                                                  ▲
+Vercel (backend code)  ──  queries  ──────────────┘
+```
+
+Both connect to the same database. Migrating is just a connection from your laptop —
+Vercel is not in that path, and no redeploy is needed for a schema change.
+
+## Every time you add a migration
+
+```bash
+cd backend
+
+# 1. Create it
+npm run migrate:make add_whatever_you_need
+
+# 2. Test on the dev database first
+npm run migrate
+npm run migrate:status
+
+# 3. Is Aiven awake? It powers off when idle, and DNS disappears with it.
+#    A dead host shows up as: getaddrinfo ENOTFOUND <host>
+nslookup <DB_HOST from .env.production>
+
+# 4. What is pending on production? (read-only, safe)
+npm run migrate:prod:status
+
+# 5. Apply it
+npm run migrate:prod
+
+# 6. Now push the code — Vercel auto-deploys
+git push
+```
+
+`NODE_ENV=production` is set by the `:prod` scripts, so Knex reads `.env.production`
+itself. Host and password are never passed on the command line.
+
+## Order matters
+
+| Migration kind | Order | Why |
+| --- | --- | --- |
+| **Additive** (new table or column) | migrate **first**, then push | The live old code ignores a column it does not know about, so there is no downtime. Push first and the new code queries a column that does not exist yet → `500` on every affected route. |
+| **Destructive** (drops something the live code still reads) | push **first**, then migrate | Otherwise the running code queries a column you just deleted. |
+
+When in doubt, make it additive. To rename a column, do it in three deploys: add the new
+one, switch the code, then drop the old one.
+
+## Rules for writing a migration
+
+1. **Never import application modules.** A migration is a frozen record of one change.
+   Import a helper today and someone renames it in six months — now the migration is
+   broken for every database still migrating up. Copy the logic in; duplication is
+   correct here. (This exact bug broke `20260730000004` in production.)
+2. **Make it re-runnable.** MySQL auto-commits DDL and cannot roll it back, so a failure
+   part-way through leaves the column behind while Knex records nothing — the retry then
+   dies on `Duplicate column name`. Guard with `hasColumn` / `SHOW INDEX` before adding,
+   and let backfills run every time.
+3. **Never run `npm run seed:prod`.** It runs *all* seeds and would insert the demo
+   members and designs above into the live database. For one specific seed:
+   ```bash
+   npx cross-env NODE_ENV=production knex seed:run --specific=01_roles_and_badges.js
+   ```
+
+## When it goes wrong
+
+| Symptom | Cause | Fix |
+| --- | --- | --- |
+| `getaddrinfo ENOTFOUND <host>` | Aiven service is powered off, or the host changed | Power it on, wait for **Running**, then re-copy Host/Port from the console into `.env.production` **and** the Vercel env vars |
+| Connection times out (host resolves) | Aiven IP allowlist | Add your IP under the service's *Allowed IP addresses* |
+| `Duplicate column name '…'` | An earlier run applied the DDL but was cut off before recording | Add the guards from rule 2, then re-run |
+| Signup / profile returns `500` after a deploy | Code is ahead of the schema | Run `npm run migrate:prod` |
+
+> **Automating it later.** Use GitHub Actions — migrate on push to `main`, then let Vercel
+> deploy. Do **not** put migrations in Vercel's build command: preview deployments build
+> too and would migrate the production database, and one failed migration takes the whole
+> deploy down.

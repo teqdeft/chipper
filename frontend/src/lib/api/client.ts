@@ -184,6 +184,94 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<A
   throw new ApiError(response.status, failure.message ?? 'Something went wrong', code, failure.error?.details);
 }
 
+/**
+ * Fetches a binary endpoint and hands back the bytes plus the filename the
+ * server suggested.
+ *
+ * The design download streams the file rather than returning the envelope, so
+ * it cannot go through `request()`. It still needs the bearer token — the API
+ * records who downloaded what — which also rules out simply pointing
+ * `window.location` at the URL.
+ */
+async function requestBlob(
+  path: string,
+  options: { fallbackName?: string; _isRetry?: boolean } = {},
+): Promise<{ blob: Blob; fileName: string }> {
+  const headers = new Headers();
+  const token = tokenStore.access;
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+
+  let response: Response;
+  try {
+    response = await fetch(`${BASE_URL}${path}`, { headers, credentials: 'include' });
+  } catch {
+    throw new ApiError(0, 'Cannot reach the server. Check your connection and try again.', 'NETWORK_ERROR');
+  }
+
+  if (!response.ok) {
+    if (response.status === 401 && !options._isRetry) {
+      const fresh = await refreshAccessToken();
+      if (fresh) return requestBlob(path, { ...options, _isRetry: true });
+      if (tokenStore.access || tokenStore.refresh) endSession();
+    }
+
+    // A failure still comes back as the normal JSON envelope.
+    let message = 'The download could not be started.';
+    let code = 'DOWNLOAD_FAILED';
+    try {
+      const payload = (await response.json()) as ApiFailure;
+      message = payload.message ?? message;
+      code = payload.error?.code ?? code;
+    } catch {
+      /* Not JSON — keep the generic message. */
+    }
+    throw new ApiError(response.status, message, code);
+  }
+
+  return {
+    blob: await response.blob(),
+    fileName: fileNameFromDisposition(response.headers.get('Content-Disposition'), options.fallbackName),
+  };
+}
+
+/** Reads `filename*=UTF-8''…` first, then the plain `filename="…"`. */
+function fileNameFromDisposition(header: string | null, fallback = 'download') {
+  if (!header) return fallback;
+
+  const encoded = /filename\*=UTF-8''([^;]+)/i.exec(header);
+  if (encoded?.[1]) {
+    try {
+      return decodeURIComponent(encoded[1].trim().replace(/^"|"$/g, ''));
+    } catch {
+      /* Malformed encoding — fall through to the plain parameter. */
+    }
+  }
+
+  const plain = /filename="?([^";]+)"?/i.exec(header);
+  if (plain?.[1]) {
+    try {
+      return decodeURIComponent(plain[1].trim());
+    } catch {
+      return plain[1].trim();
+    }
+  }
+
+  return fallback;
+}
+
+/** Saves a blob under `fileName` via a temporary object URL. */
+export function saveBlob(blob: Blob, fileName: string) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  // Revoked on the next tick so the click has already been dispatched.
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
 /** Serialises query params, dropping empties and expanding arrays. */
 export function toQuery(params: Record<string, unknown> = {}): string {
   const search = new URLSearchParams();
@@ -213,6 +301,8 @@ export const api = {
     request<T>(path, { ...options, method: 'DELETE', body }),
   upload: <T>(path: string, formData: FormData, options?: RequestOptions) =>
     request<T>(path, { ...options, method: 'POST', formData }),
+  /** Authenticated binary GET — returns the bytes and the server's filename. */
+  blob: (path: string, fallbackName?: string) => requestBlob(path, { fallbackName }),
   endSession,
 };
 

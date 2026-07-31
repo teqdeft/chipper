@@ -22,6 +22,7 @@ const { getPagination, buildPaginationMeta, applySorting } = require('../../util
 const { uuid, uniqueSlug, nextVersion, toArray, pick } = require('../../utils/helpers');
 const {
   DESIGN_STATUS, SORTABLE_DESIGN_FIELDS, COMMENT_STATUS, NOTIFICATION_TYPE, ENTITY_TYPE,
+  PUBLISH_AS, COMPONENT_TYPE,
 } = require('../../config/constants');
 const { PERMISSIONS, roleHasPermission } = require('../../config/permissions');
 const { describeFile, removeStoredFile, cleanupFiles } = require('../../middlewares/upload');
@@ -43,7 +44,14 @@ const VERSION_METADATA_FIELDS = [
 const canModerateDesigns = (user) => Boolean(user && roleHasPermission(user.role, PERMISSIONS.DESIGN_MODERATE));
 const isOwner = (design, user) => Boolean(user && Number(design.owner_id) === Number(user.id));
 
-/** Resolves every taxonomy slug in the payload to its id. */
+/**
+ * Resolves every taxonomy slug in the payload to its id.
+ *
+ * A value the vocabulary does not know resolves to null, which would silently
+ * drop the field and leave a draft that fails at publish time with no clue as
+ * to why. So anything the caller actually sent must resolve, and the mismatch
+ * is reported against the field the client can fix.
+ */
 async function resolveTaxonomyIds(payload) {
   const [componentTypeId, resourceTypeId, licenseId, materialId, fabricationId, organIds] = await Promise.all([
     taxonomyService.resolveId('component_types', payload.componentType),
@@ -53,6 +61,26 @@ async function resolveTaxonomyIds(payload) {
     taxonomyService.resolveId('fabrication_methods', payload.testedFabricationMethod),
     taxonomyService.resolveIds('organs', toArray(payload.organs)),
   ]);
+
+  const unknown = [];
+  const check = (value, id, field, label) => {
+    if (value && !id) unknown.push({ field, message: `"${value}" is not a known ${label}` });
+  };
+
+  check(payload.componentType, componentTypeId, 'componentType', 'component type');
+  check(payload.resourceType, resourceTypeId, 'resourceType', 'resource type');
+  check(payload.license, licenseId, 'license', 'licence');
+  check(payload.testedMaterial, materialId, 'testedMaterial', 'material');
+  check(payload.testedFabricationMethod, fabricationId, 'testedFabricationMethod', 'fabrication method');
+
+  // resolveIds dedupes, so the request is deduped too before counting.
+  const requestedOrgans = [...new Set(toArray(payload.organs).map((o) => String(o).toLowerCase()))];
+  if (requestedOrgans.length && organIds.length !== requestedOrgans.length) {
+    unknown.push({ field: 'organs', message: 'One or more organs are not in the vocabulary' });
+  }
+
+  if (unknown.length) throw ApiError.validation('Some values are not recognised', unknown);
+
   return { componentTypeId, resourceTypeId, licenseId, materialId, fabricationId, organIds };
 }
 
@@ -551,17 +579,50 @@ const designService = {
 
     if (!version) throw ApiError.badRequest('This design has no version to publish');
 
-    // Publishing requires the metadata the library depends on.
+    /**
+     * Publishing requires the metadata the library depends on.
+     *
+     * The create/update validators already demand this set, but a draft can
+     * predate them or be assembled field by field, so the gate is re-checked
+     * against what is actually stored rather than what was last submitted.
+     */
+    const [files, organs] = await Promise.all([
+      designRepository.listFiles(version.id),
+      designRepository.listOrgans(version.id),
+    ]);
+
     const problems = [];
-    if (!design.title) problems.push({ field: 'title', message: 'A title is required' });
-    if (!version.license_id && !version.custom_license_text) {
-      problems.push({ field: 'license', message: 'Choose a licence before publishing' });
+    const needs = (ok, field, message) => {
+      if (!ok) problems.push({ field, message });
+    };
+
+    needs(design.title, 'title', 'A title is required');
+    needs(version.summary, 'summary', 'A short summary is required');
+    needs(version.description, 'description', 'A description is required');
+    needs(version.component_type_id, 'componentType', 'A component type is required');
+    needs(version.resource_type_id, 'resourceType', 'A resource type is required');
+    needs(version.tested_material_id, 'testedMaterial', 'Declare the tested material');
+    needs(
+      version.tested_fabrication_method_id,
+      'testedFabricationMethod',
+      'Declare the tested fabrication method',
+    );
+    needs(
+      version.license_id || version.custom_license_text,
+      'license',
+      'Choose a licence before publishing',
+    );
+    needs(files.length, 'files', 'Upload at least one file');
+
+    if (design.publish_as !== PUBLISH_AS.PERSON) {
+      needs(design.institute_name, 'instituteName', 'Name the institute you are publishing under');
     }
-    if (!version.component_type_id) {
-      problems.push({ field: 'componentType', message: 'A component type is required' });
+
+    const componentType = await db('component_types').where({ id: version.component_type_id }).first('slug');
+    if (componentType?.slug === COMPONENT_TYPE.ORGAN_CHIP) {
+      needs(organs.length, 'organs', 'Select at least one tested organ');
     }
-    const files = await designRepository.listFiles(version.id);
-    if (!files.length) problems.push({ field: 'files', message: 'Upload at least one file' });
+
     if (problems.length) throw ApiError.validation('This design is not ready to publish', problems);
 
     // Strict validation of the type-specific block at publish time.

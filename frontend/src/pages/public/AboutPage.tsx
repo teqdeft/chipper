@@ -61,13 +61,16 @@ export default function AboutPage() {
         </RevealGroup>
       </div>
 
-      <Reveal delay={0.12} className="mt-16 flex flex-wrap gap-3 border-t border-line pt-10">
-        <Link to="/how-it-works" className="btn-primary">
-          How it works
-        </Link>
-        <Link to="/designs" className="btn-ghost">
-          Browse designs
-        </Link>
+      <Reveal delay={0.12} className="mt-16 border-t border-line pt-10">
+        {/* 173.3px matches the intrinsic width of the home CTA pair — mobile CTAs are one width site-wide */}
+        <div className="mx-auto flex w-[173.3px] max-w-full flex-col items-stretch gap-3 sm:mx-0 sm:w-auto sm:max-w-none sm:flex-row sm:flex-wrap">
+          <Link to="/how-it-works" className="btn-primary">
+            How it works
+          </Link>
+          <Link to="/designs" className="btn-ghost">
+            Browse designs
+          </Link>
+        </div>
       </Reveal>
     </div>
   );

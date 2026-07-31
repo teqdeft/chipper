@@ -112,8 +112,19 @@ export default function Featured() {
                   by <span className="font-semibold text-aubergine">{featured.maker}</span>,{' '}
                   {featured.affiliation}
                   {featured.verified && (
-                    <span className="ml-2 inline-flex items-center gap-1 text-green">
-                      <span className="inline-block h-1.5 w-1.5 rounded-full bg-green" aria-hidden />
+                    /**
+                     * Deliberately NOT inline-flex. A flex box takes its
+                     * baseline from its first item — the dot — which has no
+                     * text baseline, so the whole badge hung below the maker
+                     * line. As plain inline text "verified" shares the
+                     * surrounding baseline exactly, and only the dot needs
+                     * centring on the line.
+                     */
+                    <span className="ml-2 whitespace-nowrap text-green">
+                      <span
+                        className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-green align-middle"
+                        aria-hidden
+                      />
                       verified
                     </span>
                   )}

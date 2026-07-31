@@ -19,7 +19,18 @@ export function StatusBadge({
   className?: string;
 }) {
   return (
-    <span className={cn('inline-flex items-center rounded-field px-2 py-0.5 text-[0.7rem] font-semibold', tones[tone], className)}>
+    // `align-middle` matters whenever a badge sits inline with running text: an
+    // inline-flex takes its baseline from its first flex item, so the box's
+    // bottom edge lands on the text baseline and the badge hangs low. Centring
+    // it on the parent's midline is ignored when the badge is a flex item, so
+    // this is safe in every layout it is used in.
+    <span
+      className={cn(
+        'inline-flex items-center rounded-field px-2 py-0.5 align-middle text-[0.7rem] font-semibold',
+        tones[tone],
+        className,
+      )}
+    >
       {children}
     </span>
   );

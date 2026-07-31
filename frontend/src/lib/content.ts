@@ -322,5 +322,5 @@ export const footer = {
       ],
     },
   ],
-  legal: 'Open Playground · designs remain under their own licences',
+  legal: 'All Rights Reserved · 100% remote from around the world',
 };

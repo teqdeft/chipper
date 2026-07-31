@@ -188,7 +188,10 @@ export default function PublicProfilePage() {
                     {user.institution ? (
                       <Link
                         to={`/u/${user.institution.handle}`}
-                        className="inline-flex items-center gap-2 font-semibold text-deep-coral hover:underline"
+                        // The avatar is the first flex item, so without
+                        // align-middle the institution name drops below the
+                        // "Affiliated with" it continues.
+                        className="inline-flex items-center gap-2 align-middle font-semibold text-deep-coral hover:underline"
                       >
                         {user.institution.avatarUrl ? (
                           <img

@@ -4,9 +4,12 @@
  * Security posture:
  *  - Storage root is configurable (UPLOAD_DIR) and partitioned per purpose
  *    (designs / images / avatars / attachments), then per YYYY/MM.
- *  - Filenames are generated server-side (uuid + safe extension). The client
- *    name is kept only as a DB column, never used to build a path, so
- *    `../../etc/passwd` and null-byte tricks cannot escape the upload root.
+ *  - Files are stored as `<uploader-handle>-<original name>`, so who owns a
+ *    file is readable off the disk. The client-supplied part survives only
+ *    after `safeFileName` reduces it to a single path segment: directory
+ *    separators, `..`, control characters and Windows-reserved names never
+ *    survive, so the client name cannot escape the upload root. A remaining
+ *    collision gets a numeric suffix.
  *  - Extension whitelist AND mime whitelist must both pass.
  *  - Per-purpose byte limits plus a file-count cap.
  *  - Dangerous extensions are rejected outright even if whitelisted upstream.
@@ -76,6 +79,88 @@ function extensionOf(filename) {
   return path.extname(filename || '').replace('.', '').toLowerCase();
 }
 
+/** Names Windows refuses as a file, whatever the extension. */
+const RESERVED_NAMES = new Set([
+  'con', 'prn', 'aux', 'nul',
+  'com1', 'com2', 'com3', 'com4', 'com5', 'com6', 'com7', 'com8', 'com9',
+  'lpt1', 'lpt2', 'lpt3', 'lpt4', 'lpt5', 'lpt6', 'lpt7', 'lpt8', 'lpt9',
+]);
+
+/**
+ * Reduces a client-supplied filename to one safe path segment, keeping it
+ * recognisable to the person who uploaded it.
+ *
+ * Uploaders asked for their own names on disk, so this is the boundary that
+ * makes that safe: `basename` drops any directory the client tried to smuggle
+ * in, and the remaining rules kill the tricks that survive it — `..`,
+ * separators, NUL and control bytes, trailing dots/spaces (Windows strips
+ * those and can re-expose a blocked extension), and reserved device names.
+ * Returns '' when nothing usable is left, so callers fall back to a uuid.
+ */
+function safeFileName(originalName, { maxLength = 120 } = {}) {
+  const base = path.basename(String(originalName || '')).replace(/\\/g, '/').split('/').pop() || '';
+
+  const ext = extensionOf(base);
+  const suffix = ext ? `.${ext}` : '';
+
+  let stem = ext ? base.slice(0, base.length - suffix.length) : base;
+
+  stem = stem
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\x00-\x1f\x7f]/g, '')
+    .replace(/[<>:"/\\|?*]/g, '-')
+    .replace(/\s+/g, ' ')
+    // Leading dots would hide the file; a bare ".." must not survive.
+    .replace(/^[.\s]+/, '')
+    .replace(/[.\s]+$/, '')
+    .trim();
+
+  if (RESERVED_NAMES.has(stem.toLowerCase())) stem = `_${stem}`;
+  if (stem.length > maxLength) stem = stem.slice(0, maxLength).trim();
+  if (!stem) return '';
+
+  return `${stem}${suffix}`;
+}
+
+/**
+ * Slug identifying the uploader, prefixed onto every stored filename so the
+ * owner of a file is readable straight off the disk — `m.vanderberg-Lung
+ * chip.stl` rather than an anonymous `Lung chip.stl`.
+ *
+ * Handles are unique and already url-safe, which also means two people
+ * uploading "chip.stl" no longer collide into a "(1)" suffix. Returns '' for an
+ * unauthenticated request, though every upload route sits behind `authenticate`.
+ */
+function uploaderTag(user) {
+  if (!user) return '';
+  const raw = String(user.handle || user.name || (user.id ? `user-${user.id}` : '')).trim();
+
+  return raw
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/^[-._]+|[-._]+$/g, '')
+    .slice(0, 40);
+}
+
+/**
+ * First free name in `dir` for `desired`, as "file.stl", "file (1).stl", …
+ * `taken` carries the names already claimed by earlier files in the same
+ * request, which are streaming and may not be on disk yet.
+ */
+function uniqueFileName(dir, desired, taken = new Set()) {
+  const ext = path.extname(desired);
+  const stem = desired.slice(0, desired.length - ext.length);
+
+  for (let n = 0; n < 1000; n += 1) {
+    const candidate = n === 0 ? desired : `${stem} (${n})${ext}`;
+    if (!taken.has(candidate.toLowerCase()) && !fs.existsSync(path.join(dir, candidate))) {
+      return candidate;
+    }
+  }
+  // Pathological case (1000 same-named files in one month) — fall back to a uuid.
+  return `${stem}-${uuidv4()}${ext}`;
+}
+
 /** Maps an extension to the storage/DB bucket used across the API. */
 function kindOf(filename) {
   return KIND_BY_EXTENSION[extensionOf(filename)] || FILE_KIND.OTHER;
@@ -113,15 +198,36 @@ function buildStorage(folder) {
   return multer.diskStorage({
     destination(req, file, cb) {
       try {
-        cb(null, destinationFor(folder));
+        const dir = destinationFor(folder);
+        // Multer calls destination() then filename() for the same file, and
+        // filename() is not told the directory — stash it so the uniqueness
+        // check below can look inside the folder the file is heading for.
+        req._uploadDir = dir;
+        cb(null, dir);
       } catch (err) {
         cb(ApiError.internal(`Could not create the upload directory: ${err.message}`));
       }
     },
     filename(req, file, cb) {
       const ext = extensionOf(file.originalname);
-      // Server-generated name: client input never reaches the filesystem path.
-      cb(null, `${Date.now()}-${uuidv4()}${ext ? `.${ext}` : ''}`);
+      const dir = req._uploadDir || path.join(config.upload.root, folder);
+
+      // Uploads keep the name the user gave them, sanitised to a single safe
+      // segment. An unusable name (all separators, control bytes, empty) falls
+      // back to a uuid rather than failing the upload.
+      const safe = safeFileName(file.originalname) || `${Date.now()}-${uuidv4()}${ext ? `.${ext}` : ''}`;
+
+      // Prefixed with the uploader so the file's owner is obvious on disk.
+      const tag = uploaderTag(req.user);
+      const named = tag ? `${tag}-${safe}` : safe;
+
+      // Earlier files in this request are still streaming, so disk existence
+      // alone would hand two of them the same name.
+      req._takenUploadNames = req._takenUploadNames || new Set();
+      const finalName = uniqueFileName(dir, named, req._takenUploadNames);
+      req._takenUploadNames.add(finalName.toLowerCase());
+
+      cb(null, finalName);
     },
   });
 }
@@ -265,5 +371,8 @@ module.exports = {
   relativePath,
   extensionOf,
   kindOf,
+  safeFileName,
+  uniqueFileName,
+  uploaderTag,
   BLOCKED_EXTENSIONS,
 };

@@ -235,7 +235,7 @@ export default function Hero() {
                   initial={{ opacity: 0, y: 12 }}
                   animate={mounted ? { opacity: 1, y: 0 } : {}}
                   transition={{ duration: 0.75, delay: 0.55, ease: [0.22, 1, 0.36, 1] }}
-                  className="mt-6 flex w-full max-w-[17rem] flex-col items-stretch gap-2.5 md:mt-10 md:max-w-lg md:grid md:grid-cols-2 md:gap-3"
+                  className="mt-6 flex w-max max-w-full flex-col items-stretch gap-2.5 md:mt-10 md:w-full md:max-w-lg md:grid md:grid-cols-2 md:gap-3"
                 >
                   <MagneticButton href={hero.primaryCta.href} variant="primary" className="w-full justify-center">
                     {hero.primaryCta.label}

@@ -40,12 +40,12 @@ export default function Footer() {
 
         <div className="mt-12 flex flex-col items-start justify-between gap-4 border-t border-white/10 pt-6 text-sm text-canvas/50 sm:mt-16 sm:flex-row sm:items-center sm:pt-8">
           <p>
-            © {new Date().getFullYear()} {site.name}. {footer.legal}.
+           © 2012-2026. {site.name}. {footer.legal}.
           </p>
-          <p className="flex items-center gap-2">
+          {/* <p className="flex items-center gap-2">
             <span className="inline-block h-2 w-2 rounded-full bg-green" aria-hidden />
             Open Playground
-          </p>
+          </p> */}
         </div>
       </div>
     </footer>

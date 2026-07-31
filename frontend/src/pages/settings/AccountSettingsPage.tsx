@@ -275,7 +275,7 @@ export default function AccountSettingsPage() {
               {isSavingSettings ? (
                 <span className="text-ink-55">Saving…</span>
               ) : justSaved ? (
-                <span className="inline-flex items-center gap-1 font-medium text-green">
+                <span className="inline-flex items-center gap-1 align-middle font-medium text-green">
                   <svg width="12" height="12" viewBox="0 0 20 20" fill="none" aria-hidden>
                     <path
                       d="m4.5 10.4 3.2 3.1 7.8-8"
