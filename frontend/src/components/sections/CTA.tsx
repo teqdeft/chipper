@@ -17,15 +17,17 @@ export default function CTA() {
           <span className="eyebrow text-aubergine/70">{cta.eyebrow}</span>
         </Reveal>
         <Reveal delay={0.05}>
-          <h2 className="mt-4 max-w-3xl text-display-lg font-extrabold text-aubergine sm:mt-6">
+          <h2 className="mt-4 max-w-3xl text-display-md font-extrabold text-aubergine sm:mt-6">
             {cta.title}
           </h2>
         </Reveal>
         <Reveal delay={0.1}>
           <p className="mt-4 max-w-xl text-base leading-relaxed text-aubergine/80 sm:mt-6 sm:text-lg">{cta.lede}</p>
         </Reveal>
-        <Reveal delay={0.15}>
-          <div className="btn-row mt-8 w-full max-w-md sm:mt-10 sm:max-w-lg sm:grid-cols-2">
+        {/* The column centres its children, so an unstretched wrapper would
+            shrink to the buttons' own width and w-full below would be a no-op. */}
+        <Reveal delay={0.15} className="w-full">
+          <div className="btn-row mx-auto mt-8 w-full max-w-md sm:mt-10 sm:max-w-lg sm:grid-cols-2">
             <MagneticButton href={cta.primary.href} variant="primary" className="w-full">
               {cta.primary.label}
             </MagneticButton>

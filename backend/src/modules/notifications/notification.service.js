@@ -21,6 +21,7 @@ const PREFERENCE_BY_TYPE = {
   [NOTIFICATION_TYPE.FORUM_MENTION]: 'notify_mentions',
   [NOTIFICATION_TYPE.FORUM_ANSWER_ACCEPTED]: 'notify_forum_replies',
   [NOTIFICATION_TYPE.MESSAGE_RECEIVED]: 'notify_messages',
+  [NOTIFICATION_TYPE.NEWS_PUBLISHED]: 'notify_newsletter',
 };
 
 function serialize(row) {

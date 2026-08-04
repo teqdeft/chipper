@@ -26,12 +26,18 @@ export function PageHeader({ eyebrow, title, lede, actions, className }: PageHea
         </Reveal>
         {lede ? (
           <Reveal delay={0.1} y={16}>
-            <p className="mt-3 text-base leading-relaxed text-ink-70 sm:text-[1.05rem]">{lede}</p>
+            <p className="mt-3 text-base leading-relaxed text-muted sm:text-[1.05rem]">{lede}</p>
           </Reveal>
         ) : null}
       </div>
+      {/* Mobile standard: full width and stacked. A column flex box stretches
+          its items, so the buttons fill the row without needing w-full each. */}
       {actions ? (
-        <Reveal delay={0.12} y={14} className="flex shrink-0 flex-wrap items-center gap-3">
+        <Reveal
+          delay={0.12}
+          y={14}
+          className="flex w-full shrink-0 flex-col gap-3 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center"
+        >
           {actions}
         </Reveal>
       ) : null}

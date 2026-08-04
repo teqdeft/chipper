@@ -14,14 +14,14 @@ function Column({
   return (
     <div>
       <Reveal>
-        <p className="eyebrow mb-6 text-ink-40">{label}</p>
+        <p className="eyebrow mb-6 text-muted">{label}</p>
       </Reveal>
       <RevealGroup className="flex flex-col" stagger={0.08}>
         {items.map((item) => (
           <motion.div key={item.name} variants={revealItem}>
             <div className="group flex items-baseline justify-between gap-4 border-t border-line py-4 transition-colors duration-300 hover:border-line-strong sm:gap-6 sm:py-5">
               <h3 className="font-display text-xl font-bold text-aubergine sm:text-2xl">{item.name}</h3>
-              <p className="max-w-[11rem] text-right text-sm leading-snug text-ink-55 sm:max-w-[16rem]">
+              <p className="max-w-[11rem] text-right text-sm leading-snug text-muted sm:max-w-[16rem]">
                 {item.note}
               </p>
             </div>

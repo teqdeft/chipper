@@ -44,7 +44,7 @@ function WorkflowStep({
     <div
       className={cn(
         'flex flex-col gap-4',
-        asCard && 'card h-full border-line-strong bg-canvas p-5 shadow-soft sm:p-7',
+        asCard && 'card h-full border-line-strong bg-surface p-5 shadow-soft sm:p-7',
       )}
     >
       <span
@@ -58,7 +58,7 @@ function WorkflowStep({
         {step.n}
       </span>
       <h3 className="font-display text-lg font-bold text-aubergine sm:text-xl">{step.title}</h3>
-      <p className="text-[0.92rem] leading-relaxed text-ink-70 sm:text-[0.95rem]">{step.body}</p>
+      <p className="text-[0.92rem] leading-relaxed text-muted sm:text-[0.95rem]">{step.body}</p>
     </div>
   );
 }

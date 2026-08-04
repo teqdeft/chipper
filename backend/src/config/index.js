@@ -75,7 +75,29 @@ const schema = Joi.object({
   MAX_AVATAR_SIZE_MB: Joi.number().default(5),
   MAX_ATTACHMENT_SIZE_MB: Joi.number().default(25),
   MAX_FILES_PER_UPLOAD: Joi.number().default(20),
-  ALLOWED_DESIGN_EXTENSIONS: Joi.string().default('stl,step,stp,zip,pdf'),
+  // Covers the three routes a chip actually gets made by: 3D printing (mesh),
+  // CNC (CAD interchange + toolpaths) and photolithography (2D layout + masks),
+  // plus the editable CAD source and the paperwork that ships alongside.
+  // Deliberately no `zip` — a bundle hides its contents from search, filtering
+  // and the viewer, so files are uploaded individually.
+  ALLOWED_DESIGN_EXTENSIONS: Joi.string().default(
+    [
+      // Mesh — renders in the browser
+      'stl,3mf,obj,mtl,ply,glb,gltf,fbx',
+      // CAD interchange
+      'step,stp,iges,igs',
+      // 2D fabrication: drawings and photomasks
+      'dxf,dwg,gds,gdsii',
+      // Machine toolpaths — same G-code, different CAM tools
+      'gcode,nc,tap,ngc,cnc',
+      // Editable CAD source, so a design can be modified and not just printed
+      'fcstd,scad',
+      // Characterisation imagery
+      'tif,tiff',
+      // Docs and data
+      'pdf,docx,xlsx,json,csv,txt,md',
+    ].join(','),
+  ),
   ALLOWED_IMAGE_EXTENSIONS: Joi.string().default('jpg,jpeg,png,webp'),
   ALLOWED_DOCUMENT_EXTENSIONS: Joi.string().default('pdf,doc,docx,csv,txt'),
 

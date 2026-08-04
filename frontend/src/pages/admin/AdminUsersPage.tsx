@@ -169,7 +169,7 @@ export default function AdminUsersPage() {
                 render: (row) => (
                   <div>
                     <p className="font-semibold">{row.name}</p>
-                    <p className="text-xs text-ink-55">
+                    <p className="text-xs text-muted">
                       @{row.handle} · {row.email}
                     </p>
                   </div>
@@ -178,7 +178,7 @@ export default function AdminUsersPage() {
               {
                 key: 'affiliation',
                 header: 'Affiliation',
-                render: (row) => <span className="text-ink-70">{row.affiliation ?? '—'}</span>,
+                render: (row) => <span className="text-muted">{row.affiliation ?? '—'}</span>,
               },
               {
                 key: 'role',
@@ -192,7 +192,7 @@ export default function AdminUsersPage() {
                   <div>
                     <StatusBadge tone={statusTone[row.status]}>{row.status}</StatusBadge>
                     {!row.emailVerified ? (
-                      <p className="mt-1 text-[0.65rem] text-ink-55">unverified email</p>
+                      <p className="mt-1 text-[0.65rem] text-muted">unverified email</p>
                     ) : null}
                   </div>
                 ),
@@ -210,7 +210,7 @@ export default function AdminUsersPage() {
                 render: (row) => {
                   const isSelf = me != null && Number(row.id) === Number(me.id);
                   const busy = busyId === Number(row.id);
-                  if (isSelf) return <span className="text-xs text-ink-55">This is you</span>;
+                  if (isSelf) return <span className="text-xs text-muted">This is you</span>;
 
                   const original = data.items.find((u) => u.id === Number(row.id));
                   if (!original) return null;
@@ -236,7 +236,7 @@ export default function AdminUsersPage() {
                           <button
                             type="button"
                             disabled={busy}
-                            className="rounded-field border border-line px-2 py-1 text-[0.7rem] font-semibold text-ink-70 hover:bg-periwinkle-tint/50 disabled:opacity-40"
+                            className="rounded-field border border-line px-2 py-1 text-[0.7rem] font-semibold text-muted hover:bg-periwinkle-tint/50 disabled:opacity-40"
                             onClick={() => void changeStatus(original, 'suspended')}
                           >
                             Suspend
@@ -254,7 +254,7 @@ export default function AdminUsersPage() {
                         <button
                           type="button"
                           disabled={busy}
-                          className="rounded-field border border-green/40 bg-green/10 px-2 py-1 text-[0.7rem] font-semibold text-[#0f7a52] hover:bg-green/20 disabled:opacity-40"
+                          className="rounded-field border border-green/40 bg-green/10 px-2 py-1 text-[0.7rem] font-semibold text-published-green hover:bg-green/20 disabled:opacity-40"
                           onClick={() => void changeStatus(original, 'active')}
                         >
                           Reactivate

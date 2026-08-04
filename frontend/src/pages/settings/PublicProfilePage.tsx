@@ -119,23 +119,9 @@ export default function PublicProfilePage() {
 
   return (
     // Cancel AppLayout's content offset so the hero sits flush under the nav.
-    <div className="-mt-6 pb-16 sm:-mt-8 sm:pb-24">
-      {/* Atmospheric hero band — brand colours, not a flat canvas strip */}
-      <section className="relative overflow-hidden border-b border-line">
-        <div
-          className="pointer-events-none absolute inset-0"
-          aria-hidden
-          style={{
-            background:
-              'radial-gradient(ellipse 80% 70% at 12% -10%, rgba(252,113,71,0.18), transparent 55%), radial-gradient(ellipse 60% 50% at 92% 10%, rgba(153,153,221,0.28), transparent 50%), linear-gradient(180deg, #fffcf9 0%, #f7f4ff 55%, #fffcf9 100%)',
-          }}
-        />
-        <div
-          className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-line-strong to-transparent"
-          aria-hidden
-        />
-
-        <div className="container-content relative py-10 sm:py-14">
+    <div className="page-pad-flush pb-16 sm:pb-24">
+      <section className="border-b border-line bg-canvas">
+        <div className="container-content py-10 sm:py-14">
           <div className="flex flex-col gap-8 sm:flex-row sm:items-start sm:gap-10">
               <Avatar name={user.name} avatarUrl={user.avatarUrl} large />
 
@@ -150,7 +136,7 @@ export default function PublicProfilePage() {
                     <h1 className="mt-2 font-display text-display-sm font-extrabold tracking-tight text-aubergine">
                       {user.name}
                     </h1>
-                    <p className="mt-1.5 font-sans text-base text-ink-55">@{user.handle}</p>
+                    <p className="mt-1.5 font-sans text-base text-muted">@{user.handle}</p>
                   </div>
 
                   {user.isSelf ? (
@@ -172,10 +158,10 @@ export default function PublicProfilePage() {
                 </div>
 
                 {metaBits.length ? (
-                  <p className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-ink-70">
+                  <p className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted">
                     {metaBits.map((bit, i) => (
                       <span key={bit} className="inline-flex items-center gap-2">
-                        {i > 0 ? <span className="text-ink-40" aria-hidden>·</span> : null}
+                        {i > 0 ? <span className="text-muted" aria-hidden>·</span> : null}
                         {bit}
                       </span>
                     ))}
@@ -183,7 +169,7 @@ export default function PublicProfilePage() {
                 ) : null}
 
                 {showAffiliation ? (
-                  <p className="mt-3 text-sm text-ink-70">
+                  <p className="mt-3 text-sm text-muted">
                     {isInstitution ? 'Part of' : 'Affiliated with'}{' '}
                     {user.institution ? (
                       <Link
@@ -209,7 +195,7 @@ export default function PublicProfilePage() {
                 ) : null}
 
                 {user.bio ? (
-                  <p className="mt-5 max-w-2xl text-base leading-relaxed text-ink-70 sm:text-[1.05rem]">
+                  <p className="mt-5 max-w-2xl text-base leading-relaxed text-muted sm:text-[1.05rem]">
                     {user.bio}
                   </p>
                 ) : null}
@@ -292,7 +278,7 @@ export default function PublicProfilePage() {
             />
 
             {user.members.items.length === 0 ? (
-              <p className="mt-5 max-w-prose text-sm leading-relaxed text-ink-70">
+              <p className="mt-5 max-w-prose text-sm leading-relaxed text-muted">
                 Nobody has listed {user.name} as their affiliation yet. Students and researchers appear
                 here automatically once they enter it on their profile.
               </p>
@@ -310,13 +296,13 @@ export default function PublicProfilePage() {
                         <span className="block truncate font-semibold text-aubergine transition-colors group-hover:text-deep-coral">
                           {member.name}
                         </span>
-                        <span className="block truncate text-xs text-ink-55">
+                        <span className="block truncate text-xs text-muted">
                           @{member.handle}
                           {member.accountType
                             ? ` · ${ACCOUNT_TYPE_LABEL[member.accountType] ?? member.accountType}`
                             : ''}
                         </span>
-                        <span className="mt-0.5 block text-xs text-ink-55">
+                        <span className="mt-0.5 block text-xs text-muted">
                           {member.uploads} {member.uploads === 1 ? 'design' : 'designs'} ·{' '}
                           {member.reputation} rep
                         </span>
@@ -326,7 +312,7 @@ export default function PublicProfilePage() {
                 </div>
 
                 {user.members.total > user.members.items.length ? (
-                  <p className="mt-4 text-sm text-ink-55">
+                  <p className="mt-4 text-sm text-muted">
                     and {user.members.total - user.members.items.length} more
                   </p>
                 ) : null}
@@ -347,26 +333,26 @@ export default function PublicProfilePage() {
           />
 
           {recentDesigns.length === 0 ? (
-            <div className="mt-6 rounded-[16px] border border-dashed border-line bg-periwinkle-tint/30 px-6 py-10 text-center sm:rounded-card">
+            <div className="mt-6 rounded-card border border-dashed border-line bg-periwinkle-tint/30 px-6 py-10 text-center">
               <p className="font-display text-lg font-bold text-aubergine">No designs yet</p>
-              <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-ink-70">
+              <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-muted">
                 {user.isSelf
                   ? 'Publish your first design to show it here.'
                   : `${firstName} has not published a design yet.`}
               </p>
               {user.isSelf ? (
-                <Link to="/upload" className="btn-primary mt-6 inline-flex text-sm">
+                <Link to="/upload" className="btn-primary mt-6 w-full sm:w-auto text-sm">
                   Upload a design
                 </Link>
               ) : (
-                <Link to="/designs" className="btn-ghost mt-6 inline-flex text-sm">
+                <Link to="/designs" className="btn-ghost mt-6 w-full sm:w-auto text-sm">
                   Browse designs
                 </Link>
               )}
             </div>
           ) : (
             <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {recentDesigns.map((design, index) => {
+              {recentDesigns.map((design) => {
                 const published = formatPublished(design.publishedAt);
                 return (
                   <Link
@@ -374,33 +360,32 @@ export default function PublicProfilePage() {
                     to={`/designs/${design.slug}`}
                     className="card group flex h-full flex-col overflow-hidden transition-[border-color,box-shadow] duration-300 hover:border-line-strong hover:shadow-card-hover"
                   >
-                    <div className="relative aspect-[16/10] overflow-hidden border-b border-line bg-gradient-to-br from-periwinkle-tint/80 via-canvas to-coral/20">
-                      <div
-                        className="absolute -inset-6 opacity-50"
-                        style={{
-                          background:
-                            index % 2 === 0
-                              ? 'radial-gradient(circle at 28% 25%, rgba(252,113,71,0.32), transparent 55%), radial-gradient(circle at 78% 70%, rgba(153,153,221,0.4), transparent 50%)'
-                              : 'radial-gradient(circle at 70% 20%, rgba(153,153,221,0.45), transparent 55%), radial-gradient(circle at 20% 80%, rgba(252,113,71,0.28), transparent 50%)',
-                        }}
-                        aria-hidden
-                      />
-                      <span className="absolute inset-0 flex items-center justify-center font-display text-4xl font-extrabold text-aubergine/10">
-                        {design.title.slice(0, 1).toUpperCase()}
-                      </span>
+                    <div className="relative aspect-[16/10] overflow-hidden border-b border-line bg-preview">
+                      {design.coverImageUrl ? (
+                        <img
+                          src={design.coverImageUrl}
+                          alt=""
+                          loading="lazy"
+                          className="h-full w-full object-cover transition-transform duration-500 ease-premium group-hover:scale-[1.04]"
+                        />
+                      ) : (
+                        <span className="absolute inset-0 flex items-center justify-center font-display text-4xl font-extrabold text-aubergine/15">
+                          {design.title.slice(0, 1).toUpperCase()}
+                        </span>
+                      )}
                     </div>
                     <div className="flex flex-1 flex-col p-4 sm:p-5">
                       <h3 className="font-display text-lg font-bold text-aubergine transition-colors duration-300 group-hover:text-deep-coral">
                         {design.title}
                       </h3>
                       {design.summary ? (
-                        <p className="mt-2 line-clamp-2 flex-1 text-sm leading-relaxed text-ink-70">
+                        <p className="mt-2 line-clamp-2 flex-1 text-sm leading-relaxed text-muted">
                           {design.summary}
                         </p>
                       ) : (
                         <div className="flex-1" />
                       )}
-                      <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3 text-xs text-ink-55">
+                      <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3 text-xs text-muted">
                         <span>
                           <span className="text-coral">★</span> {design.stars} · {design.downloads} dl
                         </span>
@@ -432,10 +417,10 @@ function SectionHeading({
       <h2 className="font-display text-xl font-bold text-aubergine sm:text-2xl">
         {title}
         {typeof count === 'number' ? (
-          <span className="ml-2 font-sans text-base font-semibold text-ink-55">({count})</span>
+          <span className="ml-2 font-sans text-base font-semibold text-muted">({count})</span>
         ) : null}
       </h2>
-      {lede ? <p className="mt-1.5 text-sm leading-relaxed text-ink-70">{lede}</p> : null}
+      {lede ? <p className="mt-1.5 text-sm leading-relaxed text-muted">{lede}</p> : null}
     </div>
   );
 }
@@ -469,8 +454,8 @@ function Avatar({
 
 function StatCard({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-[14px] border border-line bg-canvas px-3 py-3.5 shadow-soft sm:rounded-2xl sm:px-4 sm:py-4">
-      <dt className="text-[0.7rem] font-semibold uppercase tracking-eyebrow text-ink-55">{label}</dt>
+    <div className="rounded-card border border-line bg-surface px-3 py-3.5 shadow-soft sm:px-4 sm:py-4">
+      <dt className="text-[0.7rem] font-semibold uppercase tracking-eyebrow text-muted">{label}</dt>
       <dd className="mt-1.5 font-display text-xl font-extrabold tabular-nums text-aubergine sm:text-2xl">
         {value.toLocaleString()}
       </dd>
@@ -480,13 +465,13 @@ function StatCard({ label, value }: { label: string; value: number }) {
 
 function BadgeCard({ badge }: { badge: ProfileBadge }) {
   return (
-    <div className="flex h-full items-start gap-3 rounded-[14px] border border-line bg-canvas p-3.5 shadow-soft sm:rounded-2xl">
+    <div className="flex h-full items-start gap-3 rounded-card border border-line bg-surface p-3.5 shadow-soft">
       <StatusBadge tone={BADGE_TONE[badge.tone] ?? 'periwinkle'} className="mt-0.5 shrink-0">
         {badge.name}
       </StatusBadge>
       <div className="min-w-0 pt-0.5">
         {badge.description ? (
-          <p className="text-sm leading-relaxed text-ink-70">{badge.description}</p>
+          <p className="text-sm leading-relaxed text-muted">{badge.description}</p>
         ) : (
           <p className="text-sm font-semibold text-aubergine">{badge.name}</p>
         )}

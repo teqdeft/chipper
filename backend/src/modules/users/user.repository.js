@@ -193,6 +193,30 @@ class UserRepository extends BaseRepository {
     const existing = await runner('user_badges').where({ user_id: userId, badge_id: badge.id }).first();
     if (existing) return false;
     await runner('user_badges').insert({ user_id: userId, badge_id: badge.id, awarded_by: awardedBy });
+
+    // In-app alert — deferred so badge writes never wait on notification I/O.
+    setImmediate(() => {
+      try {
+        const notificationService = require('../notifications/notification.service');
+        const { NOTIFICATION_TYPE, ENTITY_TYPE } = require('../../config/constants');
+        notificationService
+          .notify({
+            userId,
+            actorId: awardedBy || null,
+            type: NOTIFICATION_TYPE.BADGE_EARNED,
+            title: `You earned the “${badge.name}” badge`,
+            body: badge.description || 'A new badge was added to your profile.',
+            link: '/settings/profile',
+            entityType: ENTITY_TYPE.USER,
+            entityId: userId,
+            email: false,
+          })
+          .catch(() => {});
+      } catch {
+        /* ignore circular-load issues during boot */
+      }
+    });
+
     return true;
   }
 

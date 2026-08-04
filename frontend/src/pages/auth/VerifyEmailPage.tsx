@@ -4,12 +4,17 @@ import { StatusBadge } from '@/components/ui/app/StatusBadge';
 import { FormAlert, SubmitButton } from '@/components/ui/app/FormAlert';
 import { LockedEmail } from '@/components/ui/app/LockedEmail';
 import { OtpInput } from '@/components/ui/app/OtpInput';
+import { PageHeader } from '@/components/ui/app/PageHeader';
 import { authApi } from '@/lib/api/auth';
 import { describeError } from '@/lib/api/errors';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { useToast } from '@/app/providers/ToastProvider';
 
 const OTP_LENGTH = 6;
+
+/** Centered PageHeader for intermediate auth states (status badge above). */
+const CENTERED_HEADER =
+  'mt-4 flex-col items-center text-center sm:flex-col sm:items-center [&>div:first-child]:mx-auto';
 
 type LocationState = { email?: string; devOtp?: string; reason?: string } | null;
 
@@ -130,15 +135,12 @@ export default function VerifyEmailPage() {
   if (status === 'verified') {
     return (
       <div className="text-center">
-        <StatusBadge tone="green" className="mb-4">
-          Verified
-        </StatusBadge>
-        <h1 className="font-display text-display-sm font-extrabold tracking-tight text-aubergine">
-          Your email is confirmed
-        </h1>
-        <p className="mt-3 text-sm leading-relaxed text-ink-70">
-          Your account is active and you are signed in. Taking you to the designs…
-        </p>
+        <StatusBadge tone="green">Verified</StatusBadge>
+        <PageHeader
+          className={CENTERED_HEADER}
+          title="Your email is confirmed"
+          lede="Your account is active and you are signed in. Taking you to the designs…"
+        />
       </div>
     );
   }
@@ -146,15 +148,12 @@ export default function VerifyEmailPage() {
   if (!email && !linkToken) {
     return (
       <div className="text-center">
-        <StatusBadge tone="yellow" className="mb-4">
-          Verification
-        </StatusBadge>
-        <h1 className="font-display text-display-sm font-extrabold tracking-tight text-aubergine">
-          Start from registration
-        </h1>
-        <p className="mt-3 text-sm leading-relaxed text-ink-70">
-          We need the email you signed up with before we can send a code.
-        </p>
+        <StatusBadge tone="yellow">Verification</StatusBadge>
+        <PageHeader
+          className={CENTERED_HEADER}
+          title="Start from registration"
+          lede="We need the email you signed up with before we can send a code."
+        />
         <div className="mt-8 flex flex-col gap-3">
           <Link to="/register" className="btn-primary w-full justify-center">
             Create an account
@@ -170,17 +169,16 @@ export default function VerifyEmailPage() {
   return (
     <div>
       <div className="text-center">
-        <StatusBadge tone="yellow" className="mb-4">
-          Pending verification
-        </StatusBadge>
-        <h1 className="font-display text-display-sm font-extrabold tracking-tight text-aubergine">
-          Enter your code
-        </h1>
-        <p className="mt-3 text-sm leading-relaxed text-ink-70">
-          {state?.reason === 'unverified'
-            ? 'Confirm your email to unlock uploading and posting.'
-            : `We sent a ${OTP_LENGTH}-digit code. Enter it below to finish creating your account.`}
-        </p>
+        <StatusBadge tone="yellow">Pending verification</StatusBadge>
+        <PageHeader
+          className={CENTERED_HEADER}
+          title="Enter your code"
+          lede={
+            state?.reason === 'unverified'
+              ? 'Confirm your email to unlock uploading and posting.'
+              : `We sent a ${OTP_LENGTH}-digit code. Enter it below to finish creating your account.`
+          }
+        />
       </div>
 
       <form
@@ -226,9 +224,9 @@ export default function VerifyEmailPage() {
         </SubmitButton>
       </form>
 
-      <div className="mt-8 rounded-[16px] border border-line bg-canvas px-5 py-5 text-center sm:rounded-card">
-        <p className="text-xs font-semibold uppercase tracking-eyebrow text-ink-55">Did not get it?</p>
-        <p className="mt-2 text-sm leading-relaxed text-ink-70">
+      <div className="mt-8 rounded-card border border-line bg-surface px-5 py-5 text-center">
+        <p className="text-xs font-semibold uppercase tracking-eyebrow text-muted">Did not get it?</p>
+        <p className="mt-2 text-sm leading-relaxed text-muted">
           Check spam, or send a fresh code. Codes expire after 48 hours and work once.
         </p>
         <button
@@ -241,7 +239,7 @@ export default function VerifyEmailPage() {
         </button>
       </div>
 
-      <p className="mt-6 text-center text-sm text-ink-70">
+      <p className="mt-6 text-center text-sm text-muted">
         Wrong address?{' '}
         <Link to="/register" className="font-semibold text-deep-coral hover:underline">
           Register again

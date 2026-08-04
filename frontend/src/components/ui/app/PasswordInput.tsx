@@ -62,7 +62,7 @@ export function PasswordInput({ showRequirements, className, value, ...props }: 
             props.onBlur?.(e);
           }}
           className={cn(
-            'w-full rounded-field border border-line bg-canvas py-2.5 pl-3.5 pr-11 text-sm text-aubergine outline-none transition-colors placeholder:text-ink-40 focus:border-line-strong focus:shadow-ring',
+            'w-full rounded-field border border-line-strong bg-canvas py-2.5 pl-3.5 pr-11 text-sm text-aubergine outline-none transition-colors placeholder:text-muted focus:shadow-ring',
             className,
           )}
         />
@@ -73,7 +73,7 @@ export function PasswordInput({ showRequirements, className, value, ...props }: 
           aria-label={revealed ? 'Hide password' : 'Show password'}
           aria-pressed={revealed}
           title={revealed ? 'Hide password' : 'Show password'}
-          className="absolute right-1.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-btn text-ink-55 transition-colors hover:bg-periwinkle-tint/60 hover:text-aubergine focus-visible:shadow-ring focus-visible:outline-none"
+          className="absolute right-1.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-btn text-muted transition-colors hover:bg-periwinkle-tint/60 hover:text-aubergine focus-visible:shadow-ring focus-visible:outline-none"
         >
           <EyeIcon open={revealed} />
         </button>
@@ -121,7 +121,7 @@ export function PasswordInput({ showRequirements, className, value, ...props }: 
                 key={requirement.label}
                 className={cn(
                   'flex items-center gap-1.5 text-xs transition-colors',
-                  met[index] ? 'text-green' : 'text-ink-55',
+                  met[index] ? 'text-green' : 'text-muted',
                 )}
               >
                 <span className="shrink-0" aria-hidden>

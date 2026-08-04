@@ -18,13 +18,14 @@ const ApiError = require('../../utils/ApiError');
 const { hashPassword, comparePassword } = require('../../utils/password');
 const jwtUtil = require('../../utils/jwt');
 const { uuid, uniqueHandle } = require('../../utils/helpers');
-const { ROLES, USER_STATUS, TOKEN_TYPES } = require('../../config/constants');
+const { ROLES, USER_STATUS, TOKEN_TYPES, NOTIFICATION_TYPE } = require('../../config/constants');
 const { permissionsForRole } = require('../../config/permissions');
 const userRepository = require('../users/user.repository');
 const { identityKeysFor } = require('../users/affiliation');
 const { toPrivateUser } = require('../users/user.serializer');
 const mailService = require('../../services/mail.service');
 const auditService = require('../../services/audit.service');
+const notificationService = require('../notifications/notification.service');
 
 const MAX_FAILED_LOGINS = 8;
 const LOCK_MINUTES = 15;
@@ -530,6 +531,16 @@ const authService = {
 
       await userRepository.awardBadge(user.id, 'early-adopter').catch(() => {});
       mailService.sendWelcomeEmail(user).catch(() => {});
+      notificationService
+        .notify({
+          userId: user.id,
+          type: NOTIFICATION_TYPE.WELCOME,
+          title: 'Welcome to Chipper',
+          body: 'Your account is verified. Explore designs, join the forum, or upload your first chip.',
+          link: '/designs',
+          email: false,
+        })
+        .catch(() => {});
       await auditService.log({
         userId: user.id,
         action: 'auth.register',
@@ -561,6 +572,16 @@ const authService = {
 
     await userRepository.awardBadge(user.id, 'early-adopter').catch(() => {});
     mailService.sendWelcomeEmail(user).catch(() => {});
+    notificationService
+      .notify({
+        userId: user.id,
+        type: NOTIFICATION_TYPE.WELCOME,
+        title: 'Welcome to Chipper',
+        body: 'Your account is verified. Explore designs, join the forum, or upload your first chip.',
+        link: '/designs',
+        email: false,
+      })
+      .catch(() => {});
 
     const tokens = await issueTokens(user, context);
 

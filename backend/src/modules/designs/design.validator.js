@@ -186,6 +186,9 @@ module.exports = {
       bump: Joi.string().valid('major', 'minor').default('minor'),
       note: Joi.string().trim().max(500).allow('', null),
       copyMetadata: Joi.boolean().default(true),
+      // Files are carried forward by default so a version bump does not mean
+      // re-uploading everything that did not change.
+      copyFiles: Joi.boolean().default(true),
     }),
   },
 
@@ -204,7 +207,10 @@ module.exports = {
     body: Joi.object({
       versionId: c.id,
       primaryIndex: Joi.number().integer().min(0),
+      // Up to three gallery covers. `coverIndex` is the older single-cover
+      // parameter and still works; the service takes whichever was sent.
       coverIndex: Joi.number().integer().min(0),
+      coverIndexes: c.csvNumbers,
     }),
   },
 

@@ -69,10 +69,10 @@ export function FormAlert({ tone = 'error', title, message, details, onDismiss, 
 
         <div className="min-w-0 flex-1 text-sm leading-relaxed">
           {title ? <p className={cn('font-semibold', style.heading)}>{title}</p> : null}
-          <div className={cn('text-ink-70', title && 'mt-0.5')}>{message}</div>
+          <div className={cn('text-muted', title && 'mt-0.5')}>{message}</div>
 
           {detailItems.length > 1 ? (
-            <ul className="mt-2 list-disc space-y-0.5 pl-4 text-ink-70">
+            <ul className="mt-2 list-disc space-y-0.5 pl-4 text-muted">
               {detailItems.map((item, index) => (
                 <li key={index}>{item}</li>
               ))}
@@ -85,7 +85,7 @@ export function FormAlert({ tone = 'error', title, message, details, onDismiss, 
             type="button"
             onClick={onDismiss}
             aria-label="Dismiss"
-            className="-mr-1 -mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-btn text-ink-55 transition-colors hover:bg-canvas hover:text-aubergine"
+            className="-mr-1 -mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-btn text-muted transition-colors hover:bg-canvas hover:text-aubergine"
           >
             <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden>
               <path d="m3.5 3.5 7 7m0-7-7 7" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />

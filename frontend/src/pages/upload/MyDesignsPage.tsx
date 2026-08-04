@@ -11,7 +11,7 @@ import { Reveal } from '@/components/ui/Reveal';
 import { useApiResource } from '@/hooks/useApiResource';
 import { useToast } from '@/app/providers/ToastProvider';
 import { designApi } from '@/lib/api/designs';
-import type { DesignListItem } from '@/lib/api/designs';
+import type { OwnDesignListItem } from '@/lib/api/designs';
 import { formatListDate } from '@/lib/utils';
 
 const STATUS_FILTERS = [
@@ -22,14 +22,14 @@ const STATUS_FILTERS = [
   { value: 'archived', label: 'Archived' },
 ];
 
-function statusTone(status: DesignListItem['status']) {
+function statusTone(status: OwnDesignListItem['status']) {
   if (status === 'published') return 'green' as const;
   if (status === 'pending') return 'yellow' as const;
   if (status === 'rejected') return 'coral' as const;
   return 'ink' as const;
 }
 
-function statusLabel(status: DesignListItem['status']) {
+function statusLabel(status: OwnDesignListItem['status']) {
   if (status === 'pending') return 'under review';
   return status;
 }
@@ -48,12 +48,16 @@ export default function MyDesignsPage() {
 
   const designs = useApiResource(() => designApi.mine(params), [params]);
 
-  /** A draft that already has files can be sent to review straight from here. */
+  /**
+   * A draft that already has files can be sent to review straight from here.
+   * `versionId` targets a version branched behind a live one — without it the
+   * API resubmits whichever version is currently published.
+   */
   const submitForReview = useCallback(
-    async (design: DesignListItem) => {
+    async (design: OwnDesignListItem, versionId?: number) => {
       setPublishing(design.slug);
       try {
-        const result = await designApi.publish(design.slug);
+        const result = await designApi.publish(design.slug, versionId ? { versionId } : {});
         toast.success(result.requiresReview ? 'Sent for review' : 'Published', result.message);
         designs.reload();
       } catch (error) {
@@ -144,7 +148,7 @@ export default function MyDesignsPage() {
                     >
                       {row.title}
                     </Link>
-                    <p className="mt-0.5 text-xs text-ink-55 line-clamp-2">{row.summary}</p>
+                    <p className="mt-0.5 text-xs text-muted line-clamp-2">{row.summary}</p>
                   </div>
                 ),
               },
@@ -158,20 +162,32 @@ export default function MyDesignsPage() {
               {
                 key: 'version',
                 header: 'Version',
-                render: (row) => (row.version ? <span className="pill">{row.version}</span> : '—'),
+                render: (row) => (
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {row.version ? <span className="pill">{row.version}</span> : '—'}
+                    {/* A version branched behind the live one is invisible in the
+                        status column, which still reads "published". */}
+                    {row.pendingVersion ? (
+                      <span className="pill whitespace-nowrap text-deep-coral">
+                        {row.pendingVersion.version}{' '}
+                        {row.pendingVersion.status === 'pending' ? 'in review' : 'draft'}
+                      </span>
+                    ) : null}
+                  </div>
+                ),
               },
               {
                 key: 'updated',
                 header: 'Updated',
                 className: 'whitespace-nowrap',
-                render: (row) => <span className="text-ink-70">{formatListDate(row.updatedAt)}</span>,
+                render: (row) => <span className="text-muted">{formatListDate(row.updatedAt)}</span>,
               },
               {
                 key: 'stats',
                 header: 'Engagement',
                 className: 'whitespace-nowrap',
                 render: (row) => (
-                  <span className="text-ink-70">
+                  <span className="text-muted">
                     {row.downloads} dl · {row.stars} ★
                   </span>
                 ),
@@ -188,12 +204,35 @@ export default function MyDesignsPage() {
                     >
                       Edit
                     </Link>
-                    {row.status === 'draft' ? (
+
+                    {/* Only a live design can be versioned — an unpublished one
+                        is edited in place instead. */}
+                    {row.status === 'published' && !row.pendingVersion ? (
+                      <Link
+                        to={`/my-designs/${encodeURIComponent(row.slug)}/new-version`}
+                        className="text-xs font-semibold text-deep-coral hover:underline"
+                      >
+                        New version
+                      </Link>
+                    ) : null}
+
+                    {row.pendingVersion?.status === 'draft' ? (
+                      <button
+                        type="button"
+                        onClick={() => submitForReview(row, row.pendingVersion!.id)}
+                        disabled={publishing === row.slug}
+                        className="text-xs font-semibold text-muted hover:text-aubergine hover:underline disabled:opacity-50"
+                      >
+                        {publishing === row.slug
+                          ? 'Submitting…'
+                          : `Submit ${row.pendingVersion.version}`}
+                      </button>
+                    ) : row.status === 'draft' ? (
                       <button
                         type="button"
                         onClick={() => submitForReview(row)}
                         disabled={publishing === row.slug}
-                        className="text-xs font-semibold text-ink-70 hover:text-aubergine hover:underline disabled:opacity-50"
+                        className="text-xs font-semibold text-muted hover:text-aubergine hover:underline disabled:opacity-50"
                       >
                         {publishing === row.slug ? 'Submitting…' : 'Submit for review'}
                       </button>

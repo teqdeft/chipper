@@ -39,7 +39,7 @@ export default class ErrorBoundary extends Component<Props, State> {
 
     return (
       <div className="flex min-h-screen items-center justify-center bg-canvas px-6 py-16">
-        <div className="w-full max-w-md rounded-[16px] border border-line bg-canvas p-8 text-center shadow-soft">
+        <div className="w-full max-w-md rounded-card border border-line bg-surface p-8 text-center shadow-soft">
           <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-coral/15 text-deep-coral">
             <svg width="22" height="22" viewBox="0 0 20 20" fill="none" aria-hidden>
               <path d="M10 2.75 18 16.5H2L10 2.75Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
@@ -49,12 +49,12 @@ export default class ErrorBoundary extends Component<Props, State> {
           </span>
 
           <h1 className="mt-5 font-display text-xl font-bold text-aubergine">This page hit a snag</h1>
-          <p className="mt-2 text-sm leading-relaxed text-ink-70">
+          <p className="mt-2 text-sm leading-relaxed text-muted">
             Something broke while rendering. Nothing you did caused it, and your work is not lost.
           </p>
 
           {import.meta.env.DEV ? (
-            <pre className="mt-4 max-h-40 overflow-auto rounded-field border border-line bg-periwinkle-tint/20 p-3 text-left text-xs text-ink-70">
+            <pre className="mt-4 max-h-40 overflow-auto rounded-field border border-line bg-periwinkle-tint/20 p-3 text-left text-xs text-muted">
               {error.message}
             </pre>
           ) : null}

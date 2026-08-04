@@ -33,6 +33,8 @@ export type RecentDesign = {
   downloads: number;
   stars: number;
   publishedAt: string | null;
+  /** First cover (or first image) — same as browse-card thumbnail. */
+  coverImageUrl: string | null;
 };
 
 /** A person listed on an institution's profile. */

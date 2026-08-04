@@ -18,6 +18,7 @@ const statusTone: Record<AdminArticle['status'], 'green' | 'yellow' | 'ink'> = {
   archived: 'ink',
 };
 
+/** Matches public news cards — Announcement / Guide / Event. */
 const CATEGORIES = ['Announcement', 'Guide', 'Event'];
 
 type Draft = {
@@ -27,6 +28,10 @@ type Draft = {
   body: string;
   category: string;
   status: AdminArticle['status'];
+  featured: boolean;
+  /** YYYY-MM-DD for the date shown on the public news page. */
+  publishedAt: string;
+  bodyReady: boolean;
 };
 
 const EMPTY_DRAFT: Draft = {
@@ -36,7 +41,17 @@ const EMPTY_DRAFT: Draft = {
   body: '',
   category: 'Announcement',
   status: 'draft',
+  featured: false,
+  publishedAt: '',
+  bodyReady: true,
 };
+
+function toDateInput(iso: string | null | undefined) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toISOString().slice(0, 10);
+}
 
 /** SCR-037 — Manage news & pages (CHIP-033, CHIP-035). */
 export default function AdminNewsPage() {
@@ -55,37 +70,71 @@ export default function AdminNewsPage() {
     setDraft((d) => (d ? { ...d, [key]: value } : d));
   }
 
-  function openEditor(article?: AdminArticle) {
-    setDraft(
-      article
-        ? {
-            slug: article.slug,
-            title: article.title,
-            excerpt: article.excerpt ?? '',
-            // List rows don't carry the body — fetched lazily would be nicer,
-            // but the CMS body is small; the update endpoint merges fields, so
-            // an untouched empty body is simply not sent.
-            body: article.bodyRaw ?? '',
-            category: article.category ?? 'Announcement',
-            status: article.status,
-          }
-        : { ...EMPTY_DRAFT },
-    );
+  async function openEditor(article?: AdminArticle) {
+    if (!article) {
+      setDraft({ ...EMPTY_DRAFT });
+      return;
+    }
+
+    setDraft({
+      slug: article.slug,
+      title: article.title,
+      excerpt: article.excerpt ?? '',
+      body: article.bodyRaw ?? '',
+      category: article.category ?? 'Announcement',
+      status: article.status,
+      featured: article.featured,
+      publishedAt: toDateInput(article.publishedAt ?? article.date),
+      bodyReady: Boolean(article.bodyRaw),
+    });
+
+    // List rows omit body — load the full article so edits keep content.
+    if (!article.bodyRaw) {
+      try {
+        const full = await adminApi.getArticle(article.slug);
+        setDraft((d) =>
+          d && d.slug === article.slug
+            ? {
+                ...d,
+                body: full.bodyRaw ?? '',
+                excerpt: full.excerpt ?? d.excerpt,
+                featured: full.featured,
+                publishedAt: toDateInput(full.publishedAt ?? full.date) || d.publishedAt,
+                bodyReady: true,
+              }
+            : d,
+        );
+      } catch (err) {
+        toast.fromError(err);
+        setDraft((d) => (d && d.slug === article.slug ? { ...d, bodyReady: true } : d));
+      }
+    }
   }
 
   async function handleSave(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!draft) return;
+    if (!draft || !draft.bodyReady) return;
     setIsSaving(true);
 
     try {
+      // Date-only → UTC midnight (not noon). Noon UTC hid "today" posts for
+      // morning publishes (e.g. IST) because published_at was still in the future.
+      const publishedAt = draft.publishedAt
+        ? new Date(`${draft.publishedAt}T00:00:00.000Z`).toISOString()
+        : undefined;
+
       const payload = {
         title: draft.title,
         excerpt: draft.excerpt || null,
-        // Never blank an existing body that was not loaded into the editor.
-        ...(draft.body ? { body: draft.body } : {}),
+        body: draft.body || null,
         category: draft.category,
         status: draft.status,
+        featured: draft.featured,
+        ...(publishedAt !== undefined
+          ? { publishedAt }
+          : draft.status !== 'published'
+            ? { publishedAt: null }
+            : {}),
       };
 
       if (draft.slug) {
@@ -142,7 +191,7 @@ export default function AdminNewsPage() {
         title="News & pages"
         lede="Publish announcements, guides and event posts for the public site."
         actions={
-          <button type="button" className="btn-primary text-sm" onClick={() => openEditor()}>
+          <button type="button" className="btn-primary text-sm" onClick={() => void openEditor()}>
             New article
           </button>
         }
@@ -155,11 +204,11 @@ export default function AdminNewsPage() {
               {draft.slug ? `Editing: ${draft.slug}` : 'New article'}
             </h2>
 
-            <FieldShell label="Title">
+            <FieldShell label="Title" hint="Shown as the headline on the news page">
               <TextInput value={draft.title} onChange={(e) => update('title', e.target.value)} required />
             </FieldShell>
 
-            <FieldShell label="Excerpt" hint="Shown on news cards and in previews">
+            <FieldShell label="Excerpt" hint="Shown on news cards and under the title on the article page">
               <TextTextarea
                 rows={2}
                 value={draft.excerpt}
@@ -167,12 +216,24 @@ export default function AdminNewsPage() {
               />
             </FieldShell>
 
-            <FieldShell label="Body" hint="Separate paragraphs with a blank line">
-              <TextTextarea rows={8} value={draft.body} onChange={(e) => update('body', e.target.value)} />
+            <FieldShell
+              label="Body"
+              hint={
+                draft.bodyReady
+                  ? 'Separate paragraphs with a blank line — each becomes a paragraph on the article page'
+                  : 'Loading article body…'
+              }
+            >
+              <TextTextarea
+                rows={8}
+                value={draft.body}
+                onChange={(e) => update('body', e.target.value)}
+                disabled={!draft.bodyReady}
+              />
             </FieldShell>
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <FieldShell label="Category">
+              <FieldShell label="Category" hint="Badge on the public news list and article">
                 <TextSelect value={draft.category} onChange={(e) => update('category', e.target.value)}>
                   {CATEGORIES.map((category) => (
                     <option key={category} value={category}>
@@ -194,8 +255,38 @@ export default function AdminNewsPage() {
               </FieldShell>
             </div>
 
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FieldShell
+                label="Publish date"
+                hint="Date shown on the public news page (leave blank to use publish time)"
+              >
+                <TextInput
+                  type="date"
+                  value={draft.publishedAt}
+                  onChange={(e) => update('publishedAt', e.target.value)}
+                />
+              </FieldShell>
+
+              <FieldShell label="Featured" hint="Mark this post as featured in content feeds">
+                <label className="mt-2 flex cursor-pointer items-center gap-2.5 text-sm text-muted">
+                  <input
+                    type="checkbox"
+                    checked={draft.featured}
+                    onChange={(e) => update('featured', e.target.checked)}
+                    className="h-4 w-4 rounded-field border-line accent-coral"
+                  />
+                  Show as featured
+                </label>
+              </FieldShell>
+            </div>
+
             <div className="flex flex-wrap gap-3 border-t border-line pt-4">
-              <SubmitButton isLoading={isSaving} loadingLabel="Saving…" className="w-auto">
+              <SubmitButton
+                isLoading={isSaving}
+                loadingLabel="Saving…"
+                className="w-auto"
+                disabled={!draft.bodyReady}
+              >
                 {draft.slug ? 'Save changes' : draft.status === 'published' ? 'Publish' : 'Create draft'}
               </SubmitButton>
               <button type="button" className="btn-ghost" onClick={() => setDraft(null)}>
@@ -221,8 +312,9 @@ export default function AdminNewsPage() {
                 render: (row) => (
                   <div>
                     <p className="font-semibold">{row.title}</p>
-                    <p className="text-xs text-ink-55">
+                    <p className="text-xs text-muted">
                       /{row.slug} · {row.views.toLocaleString()} views
+                      {row.featured ? ' · featured' : ''}
                     </p>
                   </div>
                 ),
@@ -230,7 +322,7 @@ export default function AdminNewsPage() {
               {
                 key: 'category',
                 header: 'Category',
-                render: (row) => <span className="text-ink-70">{row.category ?? '—'}</span>,
+                render: (row) => <span className="text-muted">{row.category ?? '—'}</span>,
               },
               {
                 key: 'status',
@@ -255,15 +347,15 @@ export default function AdminNewsPage() {
                       <button
                         type="button"
                         disabled={busy}
-                        className="rounded-field border border-line px-2 py-1 text-[0.7rem] font-semibold text-ink-70 hover:bg-periwinkle-tint/50 disabled:opacity-40"
-                        onClick={() => openEditor(original)}
+                        className="rounded-field border border-line px-2 py-1 text-[0.7rem] font-semibold text-muted hover:bg-periwinkle-tint/50 disabled:opacity-40"
+                        onClick={() => void openEditor(original)}
                       >
                         Edit
                       </button>
                       <button
                         type="button"
                         disabled={busy}
-                        className="rounded-field border border-line px-2 py-1 text-[0.7rem] font-semibold text-ink-70 hover:bg-periwinkle-tint/50 disabled:opacity-40"
+                        className="rounded-field border border-line px-2 py-1 text-[0.7rem] font-semibold text-muted hover:bg-periwinkle-tint/50 disabled:opacity-40"
                         onClick={() => void togglePublish(original)}
                       >
                         {row.status === 'published' ? 'Unpublish' : 'Publish'}

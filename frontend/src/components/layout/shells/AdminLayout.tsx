@@ -56,7 +56,7 @@ export default function AdminLayout() {
             type="button"
             onClick={handleExit}
             disabled={isLeaving}
-            className="text-sm font-medium text-ink-70 transition-colors hover:text-aubergine disabled:opacity-60"
+            className="text-sm font-medium text-muted transition-colors hover:text-aubergine disabled:opacity-60"
           >
             {isLeaving ? 'Signing out…' : 'Exit admin'}
           </button>
@@ -80,7 +80,7 @@ export default function AdminLayout() {
                         'block whitespace-nowrap rounded-btn px-3 py-2 text-sm font-medium transition-colors',
                         isActive
                           ? 'bg-aubergine text-canvas'
-                          : 'text-ink-70 hover:bg-periwinkle-tint/60 hover:text-aubergine',
+                          : 'text-muted hover:bg-periwinkle-tint/60 hover:text-aubergine',
                       )
                     }
                   >

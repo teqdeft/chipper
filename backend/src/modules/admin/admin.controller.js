@@ -50,6 +50,14 @@ module.exports = {
     return ApiResponse.success(res, { data: result, message: `Design ${result.status}` });
   }),
 
+  deleteDesign: asyncHandler(async (req, res) => {
+    const result = await adminService.deleteDesign(req.params.identifier, req.body, req.user, ctx(req));
+    return ApiResponse.success(res, {
+      data: result,
+      message: `"${result.title}" was permanently deleted`,
+    });
+  }),
+
   featureDesign: asyncHandler(async (req, res) => {
     const result = await adminService.setDesignFeatured(
       req.params.identifier,
@@ -98,6 +106,14 @@ module.exports = {
   listNews: asyncHandler(async (req, res) => {
     const { items, pagination } = await contentService.listNews(req.query, { includeDrafts: true });
     return ApiResponse.paginated(res, { items, pagination, message: 'News' });
+  }),
+
+  getNews: asyncHandler(async (req, res) => {
+    const { article } = await contentService.getNews(req.params.slug, {
+      includeDrafts: true,
+      countView: false,
+    });
+    return ApiResponse.success(res, { data: { article }, message: 'Article' });
   }),
 
   createNews: asyncHandler(async (req, res) => {

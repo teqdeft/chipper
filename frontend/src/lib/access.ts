@@ -94,6 +94,15 @@ export const SCREEN_ACCESS = defineScreens({
     minRole: 'uploader',
     permissions: ['design.update.own'],
   },
+  // Branching a version ends in a publish, so it carries the same verified-email
+  // requirement the upload wizard does.
+  'my-designs/new-version': {
+    id: 'SCR-023',
+    label: 'New version',
+    minRole: 'uploader',
+    permissions: ['design.update.own'],
+    verified: true,
+  },
 
   // ── Forum — reading is public, posting is User+ (SCR-027) ─────────────
   'forum/new': { id: 'SCR-027', label: 'Ask a question', auth: true, permissions: ['forum.post'], verified: true },

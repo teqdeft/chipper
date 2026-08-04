@@ -5,9 +5,9 @@ const { db } = require('../../database/connection');
 const ApiError = require('../../utils/ApiError');
 const { pick } = require('../../utils/helpers');
 const { getPagination, buildPaginationMeta } = require('../../utils/pagination');
-const { USER_STATUS } = require('../../config/constants');
+const { USER_STATUS, FILE_KIND } = require('../../config/constants');
 const { permissionsForRole } = require('../../config/permissions');
-const { removeStoredFile, describeFile } = require('../../middlewares/upload');
+const { removeStoredFile, describeFile, publicUrlFor } = require('../../middlewares/upload');
 const userRepository = require('./user.repository');
 const { identityKeysFor, identityKeysForRow } = require('./affiliation');
 const { toPublicUser, toPrivateUser, toMemberCard, toInstitutionRef, toSettings } = require('./user.serializer');
@@ -55,7 +55,17 @@ const userService = {
         .whereNull('deleted_at')
         .orderBy('published_at', 'desc')
         .limit(12)
-        .select('id', 'uuid', 'slug', 'title', 'summary', 'download_count', 'star_count', 'published_at'),
+        .select(
+          'id',
+          'uuid',
+          'slug',
+          'title',
+          'summary',
+          'download_count',
+          'star_count',
+          'published_at',
+          'current_version_id',
+        ),
       db('designs')
         .where({ owner_id: user.id })
         .whereNull('deleted_at')
@@ -67,6 +77,24 @@ const userService = {
         )
         .first(),
     ]);
+
+    // Same cover rule as browse cards — nominated cover first, else first image.
+    const versionIds = publishedDesigns.map((d) => d.current_version_id).filter(Boolean);
+    const coverByVersion = {};
+    if (versionIds.length) {
+      const imageRows = await db('design_files')
+        .whereIn('design_version_id', versionIds)
+        .where('kind', FILE_KIND.IMAGE)
+        .orderBy('is_cover', 'desc')
+        .orderBy('sort_order')
+        .orderBy('id')
+        .select('design_version_id', 'path');
+      for (const image of imageRows) {
+        if (!(image.design_version_id in coverByVersion)) {
+          coverByVersion[image.design_version_id] = image.path;
+        }
+      }
+    }
 
     // An institution page lists the members who named it — matched on its own
     // name. Any page can also link back to the institution its affiliation
@@ -112,6 +140,7 @@ const userService = {
         downloads: Number(design.download_count) || 0,
         stars: Number(design.star_count) || 0,
         publishedAt: design.published_at,
+        coverImageUrl: publicUrlFor(coverByVersion[design.current_version_id] || null),
       })),
       // Null on a member page; an institution always gets an object, even when
       // nobody has named it yet, so the client can tell "no members" apart from

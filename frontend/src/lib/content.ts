@@ -31,7 +31,7 @@ export const hero = {
   lede: 'Inspect, cite and reuse open organ-on-chip designs — with the maker behind every one in plain sight.',
   primaryCta: { label: 'Upload a design', href: '/upload' },
   secondaryCta: { label: 'Browse all designs', href: '/designs' },
-  scrollHint: 'Scroll to explore the chip',
+  scrollHint: 'Scroll to explore',
   /** Scroll chapters — timed to the film; voice matches About + Platform. */
   scrollCaptions: [
     {
@@ -66,6 +66,109 @@ export const about = {
       k: 'A living interface',
       v: 'Two channels meet across a membrane — the barrier where real organ behaviour appears.',
     },
+  ],
+};
+
+/** SCR-002 — full About page narrative (story, principles, partners, standards). */
+export const aboutPage = {
+  eyebrow: 'About Chipper',
+  title: 'Built by researchers, for researchers.',
+  lede: 'An open community for microphysiological systems — where every organ-on-chip design carries its maker, metadata and licence in plain sight.',
+  story: {
+    eyebrow: 'Our story',
+    title: 'Designs should travel as far as papers do.',
+    paragraphs: [
+      'Organ-on-chip research moves fast, but design files often stay in lab folders or disappear when a student graduates. Chipper started as a simple question: what if every microfluidic design could be shared the way we share papers — with provenance, versioning and a licence you can actually read?',
+      'We built the Playground so labs can inspect a 3D preview, download an STL under a declared licence, and cite the maker who built it. Upload what you make; stand on what others have shared.',
+      'The platform opened to the first ten labs and has grown across eleven since April. Growth is measured in people and designs — never in sponsor logos.',
+    ],
+  },
+  mission: {
+    eyebrow: 'Mission',
+    title: 'Make organ-on-chip designs reusable, citable and trustworthy.',
+    body: 'We align metadata with ISO 22916 where possible, keep version history intact, and put the person behind every design at the top of the page — not buried in supplementary materials.',
+  },
+  principles: [
+    {
+      n: '01',
+      title: 'Maker-first provenance',
+      body: 'The person or lab behind a design sits at the top of every entry. Provenance is the signature, not a footnote.',
+    },
+    {
+      n: '02',
+      title: 'Evidence with every file',
+      body: 'Flow rate, pressure, material, licence and ISO 22916 status travel with each version — so reuse is a decision, not a risk.',
+    },
+    {
+      n: '03',
+      title: 'Open inspection first',
+      body: 'A rendered 3D preview and a clear citation before download. Nothing has to be taken on faith.',
+    },
+    {
+      n: '04',
+      title: 'Community over black boxes',
+      body: 'Forum threads, direct messages and version history keep reuse as a conversation between labs.',
+    },
+  ],
+  standards: [
+    {
+      title: 'ISO 22916',
+      body: 'Compliance is declared before a design publishes, so microfluidic dimensions and interfaces stay comparable across labs.',
+    },
+    {
+      title: 'Explicit licences',
+      body: 'CC BY 4.0, MIT or GPL — chosen by the maker and shown up front, so reuse terms are never ambiguous.',
+    },
+    {
+      title: 'Versioned metadata',
+      body: 'Publish v3 and v1 stays downloadable with its own numbers intact. History is part of the science.',
+    },
+    {
+      title: 'Fixed taxonomies',
+      body: 'Component type, organ, material and fabrication method use a shared vocabulary — so browsing stays precise.',
+    },
+  ],
+  timeline: [
+    {
+      when: 'Founding question',
+      title: 'Share designs like papers',
+      body: 'A reusable chip needs a maker, a licence and a record — not a zip file in a forgotten drive.',
+    },
+    {
+      when: 'First ten labs',
+      title: 'The Playground opens',
+      body: 'Early contributors uploaded barrier models, sensors and pumps with full metadata attached.',
+    },
+    {
+      when: 'Since April',
+      title: 'Eleven labs and counting',
+      body: 'The library grows design by design. Community stats stay human-scale on purpose.',
+    },
+    {
+      when: 'Today',
+      title: 'Inspect, cite, reuse',
+      body: 'Browse the stack, ask in the forum, and publish what you build under terms you control.',
+    },
+  ],
+  partners: [
+    {
+      name: 'University of Twente',
+      role: 'Research partner',
+      body: 'Home to leading MPS and soft-lithography groups. Co-developing open alveolar barrier models and platform metadata standards.',
+      focus: ['Soft lithography', 'Alveolar models', 'Open metadata'],
+    },
+    {
+      name: 'TNO',
+      role: 'Applied partner',
+      body: 'Applied research on perfusion systems and inline sensing. Contributing designs and validation workflows for industrial adoption.',
+      focus: ['Perfusion', 'Inline sensing', 'Validation'],
+    },
+  ],
+  focus: [
+    { label: 'Organ chips', detail: 'Two-channel barrier models and beyond' },
+    { label: 'Flow sensors', detail: 'Inline sensing that keeps perfusion honest' },
+    { label: 'Pumps', detail: 'Peristaltic micro-pumps for controlled flow' },
+    { label: 'Reservoirs & FCB', detail: 'Media routing and fluidic circuit boards' },
   ],
 };
 

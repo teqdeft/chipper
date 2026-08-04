@@ -4,9 +4,21 @@
 
 @layer base {
   :root {
-    --btn-radius: 10px;
+    --btn-radius: 999px;
     --font-bricolage: 'Bricolage Grotesque', ui-sans-serif, system-ui, sans-serif;
     --font-inter: 'Inter', ui-sans-serif, system-ui, sans-serif;
+    /* Fixed navbar heights — must match Navbar.tsx (h-14 / sm:h-[68px]) */
+    --navbar-h: 3.5rem;
+    --navbar-h-sm: 68px;
+    /* Breathing room from navbar bottom → first page content (all breakpoints) */
+    --page-pad-y: 1.5rem;
+    --page-pad-y-sm: 2rem;
+    /* Match design tokens: aubergine ink + coral accent + canvas ground */
+    --scrollbar-size: 12px;
+    --scrollbar-size-panel: 9px;
+    --scrollbar-track: rgba(69, 8, 31, 0.06);
+    --scrollbar-thumb: rgba(69, 8, 31, 0.28);
+    --scrollbar-thumb-hover: #fc7147;
     color-scheme: light;
   }
 
@@ -15,6 +27,54 @@
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
     scroll-behavior: auto; /* Lenis owns smooth scroll */
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  }
+
+  /* Brand scrollbars — aubergine like borders/ink, coral on hover like selection */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  }
+
+  *::-webkit-scrollbar {
+    width: var(--scrollbar-size);
+    height: var(--scrollbar-size);
+  }
+
+  *::-webkit-scrollbar-track {
+    margin: 3px;
+    background: rgba(69, 8, 31, 0.05);
+    border-radius: 999px;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background: rgba(69, 8, 31, 0.28);
+    border-radius: 999px;
+    border: 3px solid #fffcf9;
+    background-clip: padding-box;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background: #fc7147;
+    border: 3px solid #fffcf9;
+    background-clip: padding-box;
+  }
+
+  *::-webkit-scrollbar-thumb:active {
+    background: #b8431f;
+    border: 3px solid #fffcf9;
+    background-clip: padding-box;
+  }
+
+  *::-webkit-scrollbar-button {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+
+  *::-webkit-scrollbar-corner {
+    background: transparent;
   }
 
   /* Lenis smooth-scroll wiring */
@@ -43,11 +103,18 @@
     color: #fffcf9;
   }
 
+  /* Preflight places gray-400 here. Every placeholder is muted, on token. */
+  ::placeholder {
+    @apply text-muted;
+    opacity: 1;
+  }
+
   /* Restrained, brand-correct focus ring — part of the "floor" */
   :where(a, button, input, textarea, select, [tabindex]):focus-visible {
     outline: none;
     box-shadow: 0 0 0 3px #fffcf9, 0 0 0 6px rgba(252, 113, 71, 0.9);
-    border-radius: 8px;
+    /* Fallback shape only — zero-specificity :where() lets any rounded-* win. */
+    @apply rounded-field;
   }
 
   h1, h2, h3, h4 {
@@ -65,6 +132,33 @@
     @apply mx-auto w-full min-w-0 max-w-content px-gutter;
   }
 
+  /*
+   * Page top rhythm — one system for every screen size.
+   * page-pad-top     = navbar clearance + content gap (marketing pages)
+   * page-pad-content = content gap only (app shell already clears the navbar)
+   * page-pad-flush   = cancel page-pad-content for full-bleed heroes
+   */
+  .page-pad-top {
+    padding-top: calc(var(--navbar-h) + var(--page-pad-y));
+  }
+  .page-pad-content {
+    padding-top: var(--page-pad-y);
+  }
+  .page-pad-flush {
+    margin-top: calc(var(--page-pad-y) * -1);
+  }
+  @media (min-width: 640px) {
+    .page-pad-top {
+      padding-top: calc(var(--navbar-h-sm) + var(--page-pad-y-sm));
+    }
+    .page-pad-content {
+      padding-top: var(--page-pad-y-sm);
+    }
+    .page-pad-flush {
+      margin-top: calc(var(--page-pad-y-sm) * -1);
+    }
+  }
+
   /* Eyebrow — Inter 600 caps, .12em, no descenders jumping the line */
   .eyebrow {
     @apply font-sans text-[0.72rem] font-semibold uppercase leading-none tracking-eyebrow;
@@ -79,12 +173,13 @@
   /* ---- Buttons: yellow = start (no outline), deep periwinkle = get, outline = secondary only ---- */
   .btn {
     @apply inline-flex items-center justify-center gap-2 rounded-btn border-[1.5px]
-           px-5 py-2.5 font-sans text-[0.9rem] font-bold leading-none
+           px-5 py-2.5 font-sans text-[0.9rem] font-bold !leading-none
            transition-[transform,background-color,border-color,box-shadow] duration-300 ease-premium
            will-change-transform
            sm:px-6 sm:py-3 sm:text-[0.95rem];
   }
-  /* Equal-width stacked CTAs (client: wider + same width) */
+  /* Review item 8 — the mobile standard: button groups are full width and
+     stacked. Call sites opt into a desktop layout with sm:grid-cols-*. */
   .btn-row {
     @apply grid w-full grid-cols-1 gap-3;
   }
@@ -113,12 +208,22 @@
   .btn-ghost:hover {
     @apply bg-periwinkle-tint;
   }
+  /* Ghost on aubergine / dark bands — white outline + type (styleguide invert) */
+  .btn-ghost.btn-ghost-invert,
+  .btn-ghost-invert {
+    @apply border-canvas bg-transparent text-canvas;
+  }
+  .btn-ghost.btn-ghost-invert:hover,
+  .btn-ghost-invert:hover {
+    @apply border-canvas bg-canvas/10 text-canvas;
+  }
 
   /* Rounded cards, soft shadow, restrained border. Hover lifts 2px, border steps up, nothing changes colour. */
+  /* Surface #FFFFFF on the canvas ground — this is what separates a card from
+     the page. Never bg-canvas here: canvas-on-canvas washes the card out. */
   .card {
-    @apply rounded-[16px] border border-line bg-canvas shadow-soft
-           transition-[transform,box-shadow,border-color] duration-500 ease-premium
-           sm:rounded-card;
+    @apply rounded-card border border-line bg-surface shadow-soft
+           transition-[transform,box-shadow,border-color] duration-500 ease-premium;
   }
   .card-hover:hover {
     @apply -translate-y-0.5 border-line-strong shadow-card-hover;
@@ -131,6 +236,48 @@
 
   .hairline {
     @apply h-px w-full bg-line;
+  }
+
+  /* Nested panels (chat, drawers) — same brand tones, slightly thinner */
+  .scrollbar-panel {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(69, 8, 31, 0.28) rgba(69, 8, 31, 0.05);
+  }
+
+  .scrollbar-panel::-webkit-scrollbar {
+    width: var(--scrollbar-size-panel);
+    height: var(--scrollbar-size-panel);
+  }
+
+  .scrollbar-panel::-webkit-scrollbar-track {
+    margin: 6px 2px;
+    background: rgba(69, 8, 31, 0.05);
+    border-radius: 999px;
+  }
+
+  .scrollbar-panel::-webkit-scrollbar-thumb {
+    background: rgba(69, 8, 31, 0.28);
+    border-radius: 999px;
+    border: 2px solid #fffcf9;
+    background-clip: padding-box;
+  }
+
+  .scrollbar-panel::-webkit-scrollbar-thumb:hover {
+    background: #fc7147;
+    border: 2px solid #fffcf9;
+    background-clip: padding-box;
+  }
+
+  .scrollbar-panel::-webkit-scrollbar-thumb:active {
+    background: #b8431f;
+    border: 2px solid #fffcf9;
+    background-clip: padding-box;
+  }
+
+  .scrollbar-panel::-webkit-scrollbar-button {
+    display: none;
+    width: 0;
+    height: 0;
   }
 
   /* Mobile horizontal slider — native scroll only; both axes allowed */

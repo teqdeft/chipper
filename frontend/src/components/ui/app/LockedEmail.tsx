@@ -15,7 +15,7 @@ export function LockedEmail({
   return (
     <div
       className={cn(
-        'flex items-center gap-3 rounded-[14px] border border-line bg-coral/10 px-4 py-3.5 sm:rounded-2xl',
+        'flex items-center gap-3 rounded-card border border-line bg-coral/10 px-4 py-3.5',
         className,
       )}
     >

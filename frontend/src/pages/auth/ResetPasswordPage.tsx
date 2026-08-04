@@ -5,12 +5,17 @@ import { PasswordInput } from '@/components/ui/app/PasswordInput';
 import { FormAlert, SubmitButton } from '@/components/ui/app/FormAlert';
 import { LockedEmail } from '@/components/ui/app/LockedEmail';
 import { OtpInput } from '@/components/ui/app/OtpInput';
+import { PageHeader } from '@/components/ui/app/PageHeader';
 import { StatusBadge } from '@/components/ui/app/StatusBadge';
 import { authApi } from '@/lib/api/auth';
 import { useToast } from '@/app/providers/ToastProvider';
 import { describeError } from '@/lib/api/errors';
 
 const OTP_LENGTH = 6;
+
+/** Centered PageHeader for intermediate auth states (status badge above). */
+const CENTERED_HEADER =
+  'mt-4 flex-col items-center text-center sm:flex-col sm:items-center [&>div:first-child]:mx-auto';
 
 type LocationState = { email?: string; devOtp?: string; expiresInMinutes?: number } | null;
 
@@ -85,19 +90,16 @@ export default function ResetPasswordPage() {
   if (!linkToken && !email) {
     return (
       <div className="text-center">
-        <StatusBadge tone="yellow" className="mb-4">
-          Reset password
-        </StatusBadge>
-        <h1 className="font-display text-display-sm font-extrabold tracking-tight text-aubergine">
-          Request a code first
-        </h1>
-        <p className="mt-3 text-sm leading-relaxed text-ink-70">
-          Enter your email on the previous step so we know where to send the reset code.
-        </p>
+        <StatusBadge tone="yellow">Reset password</StatusBadge>
+        <PageHeader
+          className={CENTERED_HEADER}
+          title="Request a code first"
+          lede="Enter your email on the previous step so we know where to send the reset code."
+        />
         <Link to="/forgot-password" className="btn-primary mt-8 inline-flex w-full justify-center">
           Forgot password
         </Link>
-        <p className="mt-6 text-sm text-ink-70">
+        <p className="mt-6 text-sm text-muted">
           <Link to="/login" className="font-semibold text-deep-coral hover:underline">
             ← Back to sign in
           </Link>
@@ -109,16 +111,12 @@ export default function ResetPasswordPage() {
   return (
     <div>
       <div className="text-center">
-        <StatusBadge tone="yellow" className="mb-4">
-          New password
-        </StatusBadge>
-        <h1 className="font-display text-display-sm font-extrabold tracking-tight text-aubergine">
-          Choose a new password
-        </h1>
-        <p className="mt-3 text-sm leading-relaxed text-ink-70">
-          Your reset {linkToken ? 'link' : 'code'} is valid for {expiresIn} minutes. Pick something
-          strong you have not used here before.
-        </p>
+        <StatusBadge tone="yellow">New password</StatusBadge>
+        <PageHeader
+          className={CENTERED_HEADER}
+          title="Choose a new password"
+          lede={`Your reset ${linkToken ? 'link' : 'code'} is valid for ${expiresIn} minutes. Pick something strong you have not used here before.`}
+        />
       </div>
 
       <form className="mt-8 space-y-5" onSubmit={handleSubmit} noValidate>
@@ -178,7 +176,7 @@ export default function ResetPasswordPage() {
         </SubmitButton>
       </form>
 
-      <p className="mt-6 text-center text-sm text-ink-70">
+      <p className="mt-6 text-center text-sm text-muted">
         Need a new code?{' '}
         <Link to="/forgot-password" className="font-semibold text-deep-coral hover:underline">
           Start over

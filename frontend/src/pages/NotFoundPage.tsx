@@ -14,7 +14,7 @@ export default function NotFoundPage() {
         </h1>
       </Reveal>
       <Reveal delay={0.1}>
-        <p className="mt-4 max-w-md text-base leading-relaxed text-ink-70">
+        <p className="mt-4 max-w-md text-base leading-relaxed text-muted">
           The link may be broken or the page may have moved. Head back home or browse open organ-on-chip designs.
         </p>
       </Reveal>

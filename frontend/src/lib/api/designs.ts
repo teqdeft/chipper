@@ -16,6 +16,63 @@ import type { ApiPagination } from './types';
 
 export type TaxonomyRef = { slug: string; name: string };
 
+/**
+ * Cover images per design — mirrors MAX_COVER_IMAGES on the API, which rejects
+ * any upload that nominates more than this.
+ */
+export const MAX_COVER_IMAGES = 3;
+
+/**
+ * Mirrors ALLOWED_DESIGN_EXTENSIONS on the API. Checking client-side is a
+ * courtesy — the server enforces the same list — but it saves uploading 500 MB
+ * only to be turned away, and it can name the file that was the problem.
+ */
+export const ACCEPTED_DESIGN_EXTENSIONS = [
+  // Mesh — gets a 3D preview
+  'stl', '3mf', 'obj', 'mtl', 'ply', 'glb', 'gltf', 'fbx',
+  // CAD interchange
+  'step', 'stp', 'iges', 'igs',
+  // 2D fabrication: drawings and photomasks
+  'dxf', 'dwg', 'gds', 'gdsii',
+  // Machine toolpaths — same G-code, different CAM tools
+  'gcode', 'nc', 'tap', 'ngc', 'cnc',
+  // Editable CAD source
+  'fcstd', 'scad',
+  // Docs and data
+  'pdf', 'docx', 'xlsx', 'json', 'csv', 'txt', 'md',
+  // Images, including microscopy TIFFs
+  'jpg', 'jpeg', 'png', 'webp', 'gif', 'svg', 'tif', 'tiff',
+];
+
+/**
+ * The subset the API files under `kind: 'model'` — geometry the 3D viewer can
+ * render, and therefore what may be a version's primary file.
+ */
+export const MODEL_EXTENSIONS = [
+  'stl', '3mf', 'obj', 'ply', 'glb', 'gltf', 'fbx', 'step', 'stp', 'iges', 'igs',
+];
+
+/**
+ * Cover images. Narrower than the file list on purpose: these end up in an
+ * `<img>` on the browse card and the design page, so the formats every browser
+ * decodes are the only ones offered — a TIFF micrograph would upload fine and
+ * then render as a broken tile.
+ */
+export const COVER_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp'];
+
+export const MAX_DESIGN_FILE_BYTES = 500 * 1024 * 1024;
+export const MAX_COVER_BYTES = 10 * 1024 * 1024;
+
+/** `.stl,.3mf,…` for an `<input type="file" accept>`. */
+export function acceptAttribute(extensions: string[]) {
+  return extensions.map((ext) => `.${ext}`).join(',');
+}
+
+export function extensionOf(fileName: string) {
+  const dot = fileName.lastIndexOf('.');
+  return dot === -1 ? '' : fileName.slice(dot + 1).toLowerCase();
+}
+
 export type OperatingRange = {
   min: number | null;
   max: number | null;
@@ -83,6 +140,8 @@ export type DesignListItem = {
   summary: string | null;
   status: DesignStatus;
   version: string | null;
+  /** First cover image of the current version — the card thumbnail. */
+  coverImageUrl: string | null;
   componentType: TaxonomyRef | null;
   resourceType: TaxonomyRef | null;
   organs: string[];
@@ -95,6 +154,8 @@ export type DesignListItem = {
   author: string;
   authorHandle: string;
   authorAffiliation: string | null;
+  /** Uploader's profile picture, when they have uploaded one. */
+  authorAvatarUrl: string | null;
   publishAs: PublishAs;
   instituteName: string | null;
   downloads: number;
@@ -111,6 +172,15 @@ export type DesignListItem = {
   publishedAt: string | null;
   updatedAt: string;
   createdAt: string;
+};
+
+/**
+ * "My designs" row. Adds the version branched behind a live one: a published
+ * design whose uploader started v1.1 still reports `status: 'published'`, so
+ * without this the pending draft would be invisible in the list.
+ */
+export type OwnDesignListItem = DesignListItem & {
+  pendingVersion: { id: number; version: string; status: 'draft' | 'pending' } | null;
 };
 
 export type DesignVersion = {
@@ -178,6 +248,8 @@ export type DesignDetail = Omit<DesignListItem, 'author'> & {
     avatarUrl: string | null;
   } | null;
   authorName: string;
+  /** Up to MAX_COVER_IMAGES cover urls, in gallery order. */
+  coverImages: string[];
   currentVersion: DesignVersion | null;
   versions: VersionSummary[];
   viewer: {
@@ -393,7 +465,7 @@ export const designApi = {
 
   /** SCR-022 — the caller's own designs, drafts included. */
   mine(params: { page?: number; limit?: number; search?: string; status?: string[] } = {}) {
-    return api.get<DesignListItem[]>(`/designs/mine${toQuery(params)}`).then((r) => ({
+    return api.get<OwnDesignListItem[]>(`/designs/mine${toQuery(params)}`).then((r) => ({
       items: r.data ?? [],
       pagination: r.meta?.pagination as ApiPagination | undefined,
     }));
@@ -442,9 +514,20 @@ export const designApi = {
     return api.delete<{ deleted: boolean }>(`/designs/${encodeURIComponent(identifier)}`).then((r) => r.data);
   },
 
+  /**
+   * Branches a new draft version off the current one. Metadata and files are
+   * carried forward unless opted out, so a bump only needs the files that
+   * actually changed — the caller then uploads those against the returned id.
+   */
   createVersion(
     identifier: string,
-    body: { version?: string; bump?: 'major' | 'minor'; note?: string; copyMetadata?: boolean } = {},
+    body: {
+      version?: string;
+      bump?: 'major' | 'minor';
+      note?: string;
+      copyMetadata?: boolean;
+      copyFiles?: boolean;
+    } = {},
   ) {
     return api
       .post<{ version: DesignVersion }>(`/designs/${encodeURIComponent(identifier)}/versions`, body)
@@ -465,13 +548,18 @@ export const designApi = {
   addFiles(
     identifier: string,
     files: File[],
-    options: { versionId?: number; primaryIndex?: number; coverIndex?: number } = {},
+    options: {
+      versionId?: number;
+      primaryIndex?: number;
+      /** Positions in `files` of the gallery covers — at most MAX_COVER_IMAGES. */
+      coverIndexes?: number[];
+    } = {},
   ) {
     const form = new FormData();
     files.forEach((file) => form.append('files', file));
     if (options.versionId != null) form.append('versionId', String(options.versionId));
     if (options.primaryIndex != null) form.append('primaryIndex', String(options.primaryIndex));
-    if (options.coverIndex != null) form.append('coverIndex', String(options.coverIndex));
+    if (options.coverIndexes?.length) form.append('coverIndexes', options.coverIndexes.join(','));
 
     return api
       .upload<{ files: DesignFile[] }>(`/designs/${encodeURIComponent(identifier)}/files`, form)

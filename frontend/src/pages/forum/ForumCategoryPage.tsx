@@ -1,29 +1,43 @@
+import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { PageHeader } from '@/components/ui/app/PageHeader';
 import { EmptyState } from '@/components/ui/app/EmptyState';
-import { StatusBadge } from '@/components/ui/app/StatusBadge';
+import { ErrorState, LoadingState } from '@/components/ui/app/LoadingState';
+import { Pagination } from '@/components/ui/app/Pagination';
 import { Reveal, RevealGroup, RevealItem } from '@/components/ui/Reveal';
-import { mockCategories, mockThreads } from '@/lib/mock';
+import { useApiResource } from '@/hooks/useApiResource';
+import { forumApi, type ForumTopic } from '@/lib/api/forum';
+import { TopicRow } from './TopicRow';
 
 /** SCR-025 — Forum category listing. */
 export default function ForumCategoryPage() {
   const { category } = useParams<{ category: string }>();
-  const meta = mockCategories.find((c) => c.slug === category);
-  const threads = mockThreads.filter((t) => t.categorySlug === category);
-  const pinned = threads.filter((t) => t.pinned);
-  const rest = threads.filter((t) => !t.pinned);
+  const [page, setPage] = useState(1);
 
-  if (!meta) {
+  useEffect(() => {
+    setPage(1);
+  }, [category]);
+
+  const { data, isLoading, error, reload } = useApiResource(
+    () => forumApi.categoryTopics(category!, { page, limit: 20, sort: 'active' }),
+    [category, page],
+    { enabled: Boolean(category) },
+  );
+
+  const topics = data?.items ?? [];
+  const meta = data?.category;
+  const pinned = topics.filter((t) => t.pinned);
+  const rest = topics.filter((t) => !t.pinned);
+
+  if (!category) {
     return (
       <div className="container-content">
-        <Reveal>
-          <EmptyState
-            title="Category not found"
-            body="This forum category does not exist or may have been archived."
-            actionLabel="Back to forum"
-            actionTo="/forum"
-          />
-        </Reveal>
+        <EmptyState
+          title="Category not found"
+          body="This forum category does not exist or may have been archived."
+          actionLabel="Back to forum"
+          actionTo="/forum"
+        />
       </div>
     );
   }
@@ -32,12 +46,12 @@ export default function ForumCategoryPage() {
     <div className="container-content space-y-8">
       <PageHeader
         eyebrow="Forum"
-        title={meta.name}
-        lede={`${meta.topics} topics · fabrication, metadata and community support.`}
+        title={meta?.name ?? category}
+        lede={meta?.description || 'Questions, tips and discussions from makers in this space.'}
         actions={
           <>
             <Link to="/forum" className="btn-ghost text-sm">
-              All categories
+              All spaces
             </Link>
             <Link to="/forum/new" className="btn-primary text-sm">
               New topic
@@ -46,59 +60,56 @@ export default function ForumCategoryPage() {
         }
       />
 
-      {threads.length === 0 ? (
+      {isLoading ? (
+        <LoadingState label="Loading topics…" />
+      ) : error ? (
+        <ErrorState error={error} onRetry={reload} />
+      ) : topics.length === 0 ? (
         <Reveal delay={0.06}>
           <EmptyState
             title="No topics yet"
-            body="Be the first to start a conversation in this category."
+            body="Be the first to start a conversation in this space."
             actionLabel="Ask a question"
             actionTo="/forum/new"
           />
         </Reveal>
       ) : (
         <Reveal delay={0.06} className="space-y-6">
-          {pinned.length > 0 ? <ThreadList label="Pinned" threads={pinned} /> : null}
-          {rest.length > 0 ? <ThreadList label={pinned.length ? 'Topics' : undefined} threads={rest} /> : null}
+          {pinned.length > 0 ? (
+            <TopicList label="Pinned" topics={pinned} />
+          ) : null}
+          {rest.length > 0 ? (
+            <TopicList label={pinned.length ? 'Conversations' : undefined} topics={rest} />
+          ) : null}
+
+          <Pagination
+            pagination={data?.pagination}
+            onPage={(next) => {
+              setPage(next);
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+          />
         </Reveal>
       )}
     </div>
   );
 }
 
-function ThreadList({ label, threads }: { label?: string; threads: typeof mockThreads }) {
-  if (!threads.length) return null;
+function TopicList({ label, topics }: { label?: string; topics: ForumTopic[] }) {
+  if (!topics.length) return null;
 
   return (
     <section>
       {label ? (
-        <h2 className="mb-3 text-xs font-semibold uppercase tracking-eyebrow text-ink-55">{label}</h2>
+        <h2 className="mb-3 text-xs font-semibold uppercase tracking-eyebrow text-muted">{label}</h2>
       ) : null}
       <RevealGroup
-        className="divide-y divide-line overflow-hidden rounded-[16px] border border-line bg-canvas shadow-soft"
-        stagger={0.05}
+        className="divide-y divide-line overflow-hidden rounded-card border border-line bg-surface shadow-soft"
+        stagger={0.04}
       >
-        {threads.map((thread) => (
-          <RevealItem key={thread.id}>
-            <Link
-              to={`/forum/t/${thread.id}`}
-              className="flex flex-col gap-2 px-4 py-4 transition-colors hover:bg-periwinkle-tint/30 sm:flex-row sm:items-center sm:justify-between sm:px-5"
-            >
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  {thread.status === 'solved' ? <StatusBadge tone="green">Solved</StatusBadge> : null}
-                  {thread.status === 'open' ? <StatusBadge tone="coral">Open</StatusBadge> : null}
-                  {thread.status === 'locked' ? <StatusBadge tone="ink">Locked</StatusBadge> : null}
-                  <span className="font-semibold text-aubergine">{thread.title}</span>
-                </div>
-                <p className="mt-1 line-clamp-1 text-sm text-ink-55">{thread.excerpt}</p>
-                <p className="mt-1 text-xs text-ink-40">Started by {thread.author}</p>
-              </div>
-              <div className="flex shrink-0 gap-4 text-xs font-medium text-ink-55">
-                <span>{thread.replies} replies</span>
-                <span>{thread.views} views</span>
-                <span>{thread.updatedAt}</span>
-              </div>
-            </Link>
+        {topics.map((topic) => (
+          <RevealItem key={topic.id}>
+            <TopicRow topic={topic} showCategory={false} />
           </RevealItem>
         ))}
       </RevealGroup>

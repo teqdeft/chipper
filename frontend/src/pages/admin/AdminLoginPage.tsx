@@ -97,11 +97,11 @@ export default function AdminLoginPage() {
         </Reveal>
 
         <Reveal delay={0.08}>
-          <div className="mt-8 rounded-[16px] border border-line bg-canvas p-6 shadow-soft sm:p-8">
+          <div className="mt-8 rounded-card border border-line bg-surface p-6 shadow-soft sm:p-8">
             <h1 className="font-display text-xl font-extrabold tracking-tight text-aubergine">
               Staff sign in
             </h1>
-            <p className="mt-1.5 text-sm leading-relaxed text-ink-70">
+            <p className="mt-1.5 text-sm leading-relaxed text-muted">
               Moderator or administrator access required.
             </p>
 

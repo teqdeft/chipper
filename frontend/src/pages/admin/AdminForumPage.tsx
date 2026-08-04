@@ -149,14 +149,14 @@ export default function AdminForumPage() {
                 render: (row) => (
                   <div>
                     <p className="font-semibold">{row.name}</p>
-                    <p className="text-xs text-ink-55">/{row.slug}</p>
+                    <p className="text-xs text-muted">/{row.slug}</p>
                   </div>
                 ),
               },
               {
                 key: 'description',
                 header: 'Description',
-                render: (row) => <span className="text-ink-70">{row.description ?? '—'}</span>,
+                render: (row) => <span className="text-muted">{row.description ?? '—'}</span>,
               },
               {
                 key: 'topics',
@@ -187,7 +187,7 @@ export default function AdminForumPage() {
                       <button
                         type="button"
                         disabled={busy}
-                        className="rounded-field border border-line px-2 py-1 text-[0.7rem] font-semibold text-ink-70 hover:bg-periwinkle-tint/50 disabled:opacity-40"
+                        className="rounded-field border border-line px-2 py-1 text-[0.7rem] font-semibold text-muted hover:bg-periwinkle-tint/50 disabled:opacity-40"
                         onClick={() => void toggleCategoryLock(original)}
                       >
                         {row.is_locked ? 'Unlock' : 'Lock'}
@@ -231,7 +231,7 @@ export default function AdminForumPage() {
                       <Link to={`/forum/t/${row.slug}`} className="font-semibold hover:text-deep-coral">
                         {row.title}
                       </Link>
-                      <p className="text-xs text-ink-55">
+                      <p className="text-xs text-muted">
                         {row.category.name} · @{row.author.handle}
                       </p>
                     </div>
@@ -261,7 +261,7 @@ export default function AdminForumPage() {
                         <button
                           type="button"
                           disabled={busy}
-                          className="rounded-field border border-line px-2 py-1 text-[0.7rem] font-semibold text-ink-70 hover:bg-periwinkle-tint/50 disabled:opacity-40"
+                          className="rounded-field border border-line px-2 py-1 text-[0.7rem] font-semibold text-muted hover:bg-periwinkle-tint/50 disabled:opacity-40"
                           onClick={() => void moderateTopic(original, { pinned: !row.pinned })}
                         >
                           {row.pinned ? 'Unpin' : 'Pin'}
@@ -269,7 +269,7 @@ export default function AdminForumPage() {
                         <button
                           type="button"
                           disabled={busy}
-                          className="rounded-field border border-line px-2 py-1 text-[0.7rem] font-semibold text-ink-70 hover:bg-periwinkle-tint/50 disabled:opacity-40"
+                          className="rounded-field border border-line px-2 py-1 text-[0.7rem] font-semibold text-muted hover:bg-periwinkle-tint/50 disabled:opacity-40"
                           onClick={() =>
                             void moderateTopic(original, {
                               status: row.status === 'locked' ? 'open' : 'locked',

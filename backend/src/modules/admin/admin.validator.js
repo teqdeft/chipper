@@ -52,6 +52,12 @@ module.exports = {
     }),
   },
 
+  deleteDesign: {
+    params: Joi.object({ identifier: Joi.string().trim().max(200).required() }),
+    // The note is what the owner is told; there is no design page left to link.
+    body: Joi.object({ note: Joi.string().trim().max(1000).allow('', null) }),
+  },
+
   featureDesign: {
     params: Joi.object({ identifier: Joi.string().trim().max(200).required() }),
     body: Joi.object({ featured: Joi.boolean().required() }),

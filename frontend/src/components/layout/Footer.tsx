@@ -38,7 +38,7 @@ export default function Footer() {
           </div>
         </div>
 
-        <div className="mt-12 flex flex-col items-start justify-between gap-4 border-t border-white/10 pt-6 text-sm text-canvas/50 sm:mt-16 sm:flex-row sm:items-center sm:pt-8">
+        <div className="mt-12 flex flex-col items-start justify-between gap-4 border-t border-canvas/10 pt-6 text-sm text-canvas/50 sm:mt-16 sm:flex-row sm:items-center sm:pt-8">
           <p>
            © 2012-2026. {site.name}. {footer.legal}.
           </p>

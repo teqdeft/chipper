@@ -41,9 +41,29 @@ const MIME_BY_EXTENSION = {
   igs: ['model/iges', 'application/iges', 'application/octet-stream', 'text/plain'],
   '3mf': ['model/3mf', 'application/vnd.ms-3mfdocument', 'application/octet-stream', 'application/zip'],
   obj: ['model/obj', 'text/plain', 'application/octet-stream'],
+  mtl: ['model/mtl', 'text/plain', 'application/octet-stream'],
+  ply: ['model/ply', 'application/ply', 'application/octet-stream', 'text/plain'],
+  glb: ['model/gltf-binary', 'application/octet-stream'],
+  gltf: ['model/gltf+json', 'application/json', 'application/octet-stream', 'text/plain'],
+  fbx: ['model/fbx', 'application/fbx', 'application/octet-stream'],
   dxf: ['image/vnd.dxf', 'application/dxf', 'application/octet-stream', 'text/plain'],
   dwg: ['image/vnd.dwg', 'application/acad', 'application/octet-stream'],
+  // Photomask layout. Binary, with no registered media type of its own.
+  gds: ['application/octet-stream', 'application/x-gdsii'],
+  gdsii: ['application/octet-stream', 'application/x-gdsii'],
   gcode: ['text/x.gcode', 'text/plain', 'application/octet-stream'],
+  // The same G-code under whatever extension the CAM tool happened to write.
+  nc: ['text/x.gcode', 'text/plain', 'application/octet-stream'],
+  tap: ['text/x.gcode', 'text/plain', 'application/octet-stream'],
+  ngc: ['text/x.gcode', 'text/plain', 'application/octet-stream'],
+  cnc: ['text/x.gcode', 'text/plain', 'application/octet-stream'],
+  // A FreeCAD document is a zip around a BREP, so browsers report it either way.
+  fcstd: ['application/octet-stream', 'application/zip', 'application/x-zip-compressed'],
+  scad: ['text/plain', 'application/x-openscad', 'application/octet-stream'],
+  tif: ['image/tiff', 'image/tif', 'application/octet-stream'],
+  tiff: ['image/tiff', 'image/tif', 'application/octet-stream'],
+  // Not accepted for designs — kept so re-enabling `zip` anywhere else still
+  // gets a mime check rather than silently skipping one.
   zip: ['application/zip', 'application/x-zip-compressed', 'application/octet-stream'],
   pdf: ['application/pdf'],
   json: ['application/json', 'text/plain'],
@@ -57,17 +77,28 @@ const MIME_BY_EXTENSION = {
   gif: ['image/gif'],
   svg: ['image/svg+xml'],
   doc: ['application/msword'],
-  docx: ['application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+  // octet-stream covers the machines whose OS has no association registered.
+  docx: [
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/octet-stream',
+  ],
   xls: ['application/vnd.ms-excel'],
-  xlsx: ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+  xlsx: [
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/octet-stream',
+  ],
 };
 
 const KIND_BY_EXTENSION = {
   stl: FILE_KIND.MODEL, step: FILE_KIND.MODEL, stp: FILE_KIND.MODEL, iges: FILE_KIND.MODEL,
-  igs: FILE_KIND.MODEL, '3mf': FILE_KIND.MODEL, obj: FILE_KIND.MODEL, dxf: FILE_KIND.MODEL,
-  dwg: FILE_KIND.MODEL, gcode: FILE_KIND.MODEL,
+  igs: FILE_KIND.MODEL, '3mf': FILE_KIND.MODEL, obj: FILE_KIND.MODEL, mtl: FILE_KIND.MODEL,
+  ply: FILE_KIND.MODEL, glb: FILE_KIND.MODEL, gltf: FILE_KIND.MODEL, fbx: FILE_KIND.MODEL,
+  dxf: FILE_KIND.MODEL, dwg: FILE_KIND.MODEL, gds: FILE_KIND.MODEL, gdsii: FILE_KIND.MODEL,
+  fcstd: FILE_KIND.MODEL, scad: FILE_KIND.MODEL,
+  gcode: FILE_KIND.MODEL, nc: FILE_KIND.MODEL, tap: FILE_KIND.MODEL,
+  ngc: FILE_KIND.MODEL, cnc: FILE_KIND.MODEL,
   jpg: FILE_KIND.IMAGE, jpeg: FILE_KIND.IMAGE, png: FILE_KIND.IMAGE, webp: FILE_KIND.IMAGE,
-  gif: FILE_KIND.IMAGE, svg: FILE_KIND.IMAGE,
+  gif: FILE_KIND.IMAGE, svg: FILE_KIND.IMAGE, tif: FILE_KIND.IMAGE, tiff: FILE_KIND.IMAGE,
   pdf: FILE_KIND.DOCUMENT, doc: FILE_KIND.DOCUMENT, docx: FILE_KIND.DOCUMENT,
   xls: FILE_KIND.DOCUMENT, xlsx: FILE_KIND.DOCUMENT, txt: FILE_KIND.DOCUMENT, md: FILE_KIND.DOCUMENT,
   zip: FILE_KIND.ARCHIVE,
@@ -191,7 +222,18 @@ function publicUrlFor(relative) {
   const base = /^https?:\/\//i.test(config.upload.publicPath)
     ? config.upload.publicPath
     : `${config.app.url}${config.upload.publicPath}`;
-  return `${base}/${String(relative).replace(/^\/+/, '')}`;
+
+  // Uploads keep the name the user gave them, so a stored path can legitimately
+  // contain characters that mean something else in a URL. A browser encodes
+  // spaces on its own, but "chip#2.stl" would be read as a fragment and never
+  // reach the server — encode per segment so the separators survive.
+  const encoded = String(relative)
+    .replace(/^\/+/, '')
+    .split('/')
+    .map(encodeURIComponent)
+    .join('/');
+
+  return `${base}/${encoded}`;
 }
 
 function buildStorage(folder) {
@@ -335,6 +377,39 @@ async function cleanupFiles(files = []) {
   );
 }
 
+/**
+ * Duplicates an already-stored file so a second DB row can own its own bytes.
+ *
+ * Carrying a file from one design version to the next cannot share a path: the
+ * two rows are deleted independently, and `removeStoredFile` would take the
+ * bytes out from under whichever version was not deleted. The copy lands in the
+ * current YYYY/MM partition under a free name and is returned in the same shape
+ * `describeFile` produces, so callers can spread it straight into a file row.
+ *
+ * Returns null when the source is gone from disk — a carried-forward file that
+ * no longer exists should be skipped, not fail the whole version.
+ */
+async function copyStoredFile(relative, folder, { originalName } = {}) {
+  if (!relative) return null;
+
+  const source = path.join(config.upload.root, relative);
+  if (!source.startsWith(config.upload.root) || !fs.existsSync(source)) return null;
+
+  const dir = destinationFor(folder);
+  const name = uniqueFileName(dir, path.basename(relative));
+  const target = path.join(dir, name);
+
+  await fs.promises.copyFile(source, target);
+
+  return {
+    stored_name: name,
+    path: relativePath(target),
+    // Kind is re-derived from the display name so it matches what an upload of
+    // the same file would have recorded.
+    kind: kindOf(originalName || relative),
+  };
+}
+
 /** Deletes a stored file by its DB-relative path. Never throws. */
 async function removeStoredFile(relative) {
   if (!relative) return;
@@ -366,6 +441,7 @@ module.exports = {
   createUploader,
   cleanupFiles,
   removeStoredFile,
+  copyStoredFile,
   describeFile,
   publicUrlFor,
   relativePath,

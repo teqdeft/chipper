@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { PageHeader } from '@/components/ui/app/PageHeader';
+import { Avatar } from '@/components/ui/app/Avatar';
 import { EmptyState } from '@/components/ui/app/EmptyState';
 import { StatusBadge } from '@/components/ui/app/StatusBadge';
 import { FieldShell, TextInput, TextSelect } from '@/components/ui/app/FormField';
@@ -68,6 +69,19 @@ function filterGroupsFrom(taxonomies: Taxonomies | null): {
   ];
 }
 
+/**
+ * Who the card is credited to.
+ *
+ * The uploader, except when the design was deliberately published under an
+ * institute — that is a publishing choice, not the same thing as the uploader's
+ * affiliation, which would otherwise replace every person's name with their
+ * university.
+ */
+function bylineOf(design: BrowseItem) {
+  if (design.publishAs === 'institute' && design.instituteName) return design.instituteName;
+  return design.author;
+}
+
 function statusTone(status: DesignListItem['status']) {
   if (status === 'published') return 'green' as const;
   if (status === 'pending') return 'yellow' as const;
@@ -96,7 +110,7 @@ function FilterChip({ label, active, onClick }: { label: string; active: boolean
         'inline-flex items-center rounded-pill border px-3 py-1.5 font-sans text-[0.78rem] font-semibold leading-none transition-[background-color,border-color,color,transform] duration-300 ease-premium',
         active
           ? 'border-coral bg-coral text-aubergine shadow-soft'
-          : 'border-line bg-canvas text-ink-70 hover:border-line-strong hover:bg-periwinkle-tint/40',
+          : 'border-line bg-canvas text-muted hover:border-line-strong hover:bg-periwinkle-tint/40',
       )}
     >
       {label}
@@ -109,15 +123,21 @@ function ChipPreview({ design }: { design: BrowseItem }) {
   const isSensor = slug.includes('sensor');
   const isPump = slug === 'pump';
 
-  return (
-    <div className="relative flex h-full w-full items-center justify-center overflow-hidden">
-      <div
-        className="absolute inset-0"
-        style={{
-          background:
-            'linear-gradient(145deg, #E4E6FB 0%, #FFFCF9 48%, rgba(255,187,214,0.28) 100%)',
-        }}
+  // The uploader's own cover wins over the generic drawing. Demo rows and
+  // designs that predate cover images fall through to the drawing below.
+  if (design.coverImageUrl) {
+    return (
+      <img
+        src={design.coverImageUrl}
+        alt=""
+        loading="lazy"
+        className="h-full w-full object-cover transition-transform duration-500 ease-premium group-hover:scale-[1.04]"
       />
+    );
+  }
+
+  return (
+    <div className="relative flex h-full w-full items-center justify-center overflow-hidden bg-preview">
       <svg
         viewBox="0 0 200 120"
         className="relative z-[1] h-[70%] w-[70%] transition-transform duration-500 ease-premium group-hover:scale-[1.04]"
@@ -160,10 +180,10 @@ function SpecLine({ design }: { design: BrowseItem }) {
   if (!parts.length) return null;
 
   return (
-    <p className="mt-2 truncate text-[0.72rem] leading-none text-ink-55">
+    <p className="mt-2 truncate text-[0.72rem] leading-none text-muted">
       {parts.map((part, i) => (
         <span key={part}>
-          {i > 0 ? <span className="mx-1.5 text-ink-40">·</span> : null}
+          {i > 0 ? <span className="mx-1.5 text-muted">·</span> : null}
           <span>{part}</span>
         </span>
       ))}
@@ -277,9 +297,9 @@ export default function DesignsBrowsePage() {
   const canUpload = isAuthenticated && hasPermission('design.create');
 
   const filterRail = (
-    <aside className="rounded-card border border-line bg-canvas/90 p-5 shadow-soft backdrop-blur-sm lg:sticky lg:top-28">
+    <aside className="rounded-card border border-line bg-surface/90 p-5 shadow-soft backdrop-blur-sm lg:sticky lg:top-28">
       <div className="mb-6 flex items-center justify-between gap-2">
-        <h2 className="eyebrow text-ink-55">Filters</h2>
+        <h2 className="eyebrow text-muted">Filters</h2>
         {activeFilterCount > 0 ? (
           <button
             type="button"
@@ -304,7 +324,7 @@ export default function DesignsBrowsePage() {
         <div className="space-y-6">
           {groups.map((group) => (
             <div key={group.key}>
-              <p className="eyebrow mb-2.5 text-ink-55">{group.label}</p>
+              <p className="eyebrow mb-2.5 text-muted">{group.label}</p>
               <div className="flex flex-wrap gap-2">
                 {group.options.map((option) => (
                   <FilterChip
@@ -337,14 +357,13 @@ export default function DesignsBrowsePage() {
         lede="Inspect, cite and reuse organ-on-chip designs with provenance, licence and version history in plain sight."
         actions={
           canUpload ? (
-            /* min-w 173.3px matches the home CTA pair — mobile CTAs are one width site-wide */
-            <Link to="/upload" className="btn-primary mx-auto min-w-[173.3px] max-w-full sm:mx-0 sm:min-w-0">
+            <Link to="/upload" className="btn-primary w-full sm:w-auto">
               Upload a design
             </Link>
           ) : (
             <Link
               to={isAuthenticated ? '/how-it-works' : '/register'}
-              className="btn-primary mx-auto min-w-[173.3px] max-w-full sm:mx-0 sm:min-w-0"
+              className="btn-primary w-full sm:w-auto"
             >
               {isAuthenticated ? 'How uploading works' : 'Join to upload'}
             </Link>
@@ -379,7 +398,7 @@ export default function DesignsBrowsePage() {
 
       {activeChips.length > 0 ? (
         <Reveal delay={0.06} className="flex flex-wrap items-center gap-2">
-          <span className="eyebrow text-ink-55">Active</span>
+          <span className="eyebrow text-muted">Active</span>
           {activeChips.map((chip) => (
             <button
               key={chip.key}
@@ -389,7 +408,7 @@ export default function DesignsBrowsePage() {
               title="Remove filter"
             >
               {chip.label}
-              <span aria-hidden className="text-ink-55">
+              <span aria-hidden className="text-muted">
                 ×
               </span>
             </button>
@@ -411,7 +430,7 @@ export default function DesignsBrowsePage() {
 
         <div className="min-w-0 space-y-6">
           <Reveal delay={0.1}>
-            <p className="text-sm text-ink-70" aria-live="polite">
+            <p className="text-sm text-muted" aria-live="polite">
               {designs.isLoading ? (
                 'Loading designs…'
               ) : (
@@ -448,7 +467,7 @@ export default function DesignsBrowsePage() {
                     clearFilters();
                     setSearch('');
                   }}
-                  className="btn-ghost mt-6 inline-flex"
+                  className="btn-ghost mt-6 w-full sm:w-auto"
                 >
                   Clear filters
                 </button>
@@ -475,15 +494,20 @@ export default function DesignsBrowsePage() {
                       animate="show"
                       exit="exit"
                       whileHover={reduced ? undefined : { y: -2, transition: { duration: 0.3, ease: premiumEase } }}
-                      className="h-full"
+                      // min-w-0: a grid item defaults to min-width:auto, so it
+                      // refuses to shrink below its min-content width. The spec
+                      // line is `truncate` (white-space:nowrap), which makes that
+                      // min-content the full untruncated string — and the card
+                      // then pushes the page into a horizontal scroll on mobile.
+                      className="h-full min-w-0"
                     >
-                      <article className="group flex h-full flex-col overflow-hidden rounded-[16px] border border-line bg-canvas shadow-soft transition-[border-color,box-shadow] duration-500 ease-premium hover:border-line-strong hover:shadow-card-hover">
+                      <article className="group flex h-full flex-col overflow-hidden rounded-card border border-line bg-surface shadow-soft transition-[border-color,box-shadow] duration-500 ease-premium hover:border-line-strong hover:shadow-card-hover">
                         <Link
                           to={`/designs/${encodeURIComponent(design.slug)}`}
                           className="relative h-[120px] shrink-0 overflow-hidden border-b border-line sm:h-[132px]"
                         >
                           <ChipPreview design={design} />
-                          <span className="absolute right-2.5 top-2.5 rounded-pill bg-canvas/85 px-2 py-0.5 text-[0.62rem] font-bold uppercase tracking-wider text-ink-55 backdrop-blur-sm">
+                          <span className="absolute right-2.5 top-2.5 rounded-pill bg-canvas/85 px-2 py-0.5 text-[0.62rem] font-bold uppercase tracking-wider text-muted backdrop-blur-sm">
                             {design.resourceType?.name ?? 'Design'}
                           </span>
                           {design.isMock ? (
@@ -495,14 +519,21 @@ export default function DesignsBrowsePage() {
 
                         <div className="flex flex-1 flex-col px-4 pb-4 pt-3.5">
                           <div className="flex h-5 items-center gap-1.5">
-                            <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-coral font-display text-[0.6rem] font-bold text-aubergine">
-                              {(design.author || '?').slice(0, 1)}
-                            </span>
+                            <Avatar
+                              name={bylineOf(design) || '?'}
+                              src={design.authorAvatarUrl}
+                              className="h-5 w-5 border-0 bg-coral font-display text-[0.55rem]"
+                            />
                             <Link
                               to={`/u/${design.authorHandle}`}
-                              className="min-w-0 flex-1 truncate text-[0.72rem] text-ink-70 hover:text-deep-coral"
+                              className="min-w-0 flex-1 truncate text-[0.72rem] text-muted hover:text-deep-coral"
+                              title={
+                                design.authorAffiliation
+                                  ? `${bylineOf(design)} · ${design.authorAffiliation}`
+                                  : bylineOf(design)
+                              }
                             >
-                              {design.authorAffiliation || design.author}
+                              {bylineOf(design)}
                             </Link>
                           </div>
 
@@ -520,7 +551,7 @@ export default function DesignsBrowsePage() {
                             ) : null}
                           </div>
 
-                          <p className="mt-1.5 h-[2.5rem] text-[0.8rem] leading-snug text-ink-70 line-clamp-2">
+                          <p className="mt-1.5 h-[2.5rem] text-[0.8rem] leading-snug text-muted line-clamp-2">
                             {design.summary}
                           </p>
 
@@ -531,10 +562,10 @@ export default function DesignsBrowsePage() {
                             >
                               {statusLabel(design.status)}
                             </StatusBadge>
-                            <span className="shrink-0 text-ink-55">
+                            <span className="shrink-0 text-muted">
                               <span className="data-unit">{design.downloads}×</span>
                             </span>
-                            <span className="shrink-0 text-ink-55">
+                            <span className="shrink-0 text-muted">
                               <span className="text-coral">★</span> {design.stars}
                             </span>
                             {design.iso22916 ? (
@@ -549,7 +580,7 @@ export default function DesignsBrowsePage() {
 
                           <SpecLine design={design} />
 
-                          <div className="mt-auto flex gap-2 pt-3">
+                          <div className="mt-auto flex flex-col gap-2 pt-3 sm:flex-row">
                             {design.isMock ? (
                               // Demo rows have no stored file to hand over.
                               <span

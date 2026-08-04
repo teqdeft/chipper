@@ -3,8 +3,8 @@ import { cn } from '@/lib/utils';
 
 const tones = {
   coral: 'bg-coral/15 text-deep-coral',
-  green: 'bg-green/15 text-[#0f7a52]',
-  ink: 'bg-line text-ink-70',
+  green: 'bg-green/15 text-published-green',
+  ink: 'bg-line text-muted',
   periwinkle: 'bg-periwinkle-tint text-deep-periwinkle',
   yellow: 'bg-yellow/50 text-aubergine',
 } as const;

@@ -273,15 +273,15 @@ export default function ConversationPage() {
   if (!data) return null;
 
   return (
-    <div className="-mt-6 sm:-mt-8">
+    <div className="page-pad-flush">
       <div className="container-content max-w-3xl pb-6 pt-2 sm:pb-8 sm:pt-3">
         <Reveal>
-          <div className="flex h-[min(72vh,720px)] min-h-[420px] flex-col overflow-hidden rounded-[18px] border border-line bg-canvas shadow-soft sm:rounded-card">
+          <div className="flex h-[min(72vh,720px)] min-h-[420px] flex-col overflow-hidden rounded-card border border-line bg-surface shadow-soft">
             {/* Thread header */}
-            <header className="flex items-center gap-3 border-b border-line bg-gradient-to-r from-periwinkle-tint/40 via-canvas to-coral/10 px-4 py-3.5 sm:px-5">
+            <header className="flex items-center gap-3 border-b border-line bg-canvas px-4 py-3.5 sm:px-5">
               <Link
                 to="/messages"
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-ink-55 transition-colors hover:bg-canvas hover:text-aubergine"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:bg-canvas hover:text-aubergine"
                 aria-label="Back to inbox"
               >
                 ←
@@ -294,7 +294,7 @@ export default function ConversationPage() {
                     <span className="block truncate font-display text-base font-bold text-aubergine">
                       {title}
                     </span>
-                    <span className="block truncate text-xs text-ink-55">
+                    <span className="block truncate text-xs text-muted">
                       @{peer.handle}
                       {peer.affiliation ? ` · ${peer.affiliation}` : ''}
                     </span>
@@ -304,7 +304,7 @@ export default function ConversationPage() {
                 <div className="min-w-0 flex-1">
                   <p className="font-display text-base font-bold text-aubergine">{title}</p>
                   {data.conversation.subject ? (
-                    <p className="truncate text-xs text-ink-55">{data.conversation.subject}</p>
+                    <p className="truncate text-xs text-muted">{data.conversation.subject}</p>
                   ) : null}
                 </div>
               )}
@@ -313,7 +313,7 @@ export default function ConversationPage() {
                 {peer ? (
                   <Link
                     to={`/u/${peer.handle}`}
-                    className="hidden rounded-btn px-3 py-1.5 text-xs font-semibold text-ink-70 transition-colors hover:bg-canvas hover:text-aubergine sm:inline-flex"
+                    className="hidden rounded-btn px-3 py-1.5 text-xs font-semibold text-muted transition-colors hover:bg-canvas hover:text-aubergine sm:inline-flex"
                   >
                     Profile
                   </Link>
@@ -323,7 +323,7 @@ export default function ConversationPage() {
                     type="button"
                     onClick={handleToggleArchive}
                     disabled={isTogglingArchive}
-                    className="rounded-btn px-3 py-1.5 text-xs font-semibold text-ink-70 transition-colors hover:bg-canvas hover:text-aubergine disabled:opacity-60"
+                    className="rounded-btn px-3 py-1.5 text-xs font-semibold text-muted transition-colors hover:bg-canvas hover:text-aubergine disabled:opacity-60"
                   >
                     {isTogglingArchive
                       ? '…'
@@ -336,7 +336,7 @@ export default function ConversationPage() {
             </header>
 
             {data.conversation.isArchived ? (
-              <p className="border-b border-line bg-periwinkle-tint/35 px-4 py-2 text-center text-xs font-medium text-ink-70 sm:px-5">
+              <p className="border-b border-line bg-periwinkle-tint/35 px-4 py-2 text-center text-xs font-medium text-muted sm:px-5">
                 Archived
                 {data.conversation.subject ? ` · ${data.conversation.subject}` : ''}.{' '}
                 <button
@@ -349,25 +349,22 @@ export default function ConversationPage() {
                 </button>
               </p>
             ) : data.conversation.subject ? (
-              <p className="border-b border-line bg-periwinkle-tint/25 px-4 py-2 text-center text-xs font-medium text-ink-55 sm:px-5">
+              <p className="border-b border-line bg-periwinkle-tint/25 px-4 py-2 text-center text-xs font-medium text-muted sm:px-5">
                 {data.conversation.subject}
               </p>
             ) : null}
 
-            {/* Message stream */}
+            {/* Message stream — data-lenis-prevent keeps wheel scroll inside the box */}
             <div
               ref={scrollRef}
               onScroll={onScroll}
-              className="relative flex-1 overflow-y-auto overscroll-contain px-3 py-4 sm:px-5"
-              style={{
-                background:
-                  'radial-gradient(ellipse 70% 40% at 10% 0%, rgba(153,153,221,0.12), transparent 55%), radial-gradient(ellipse 50% 30% at 90% 100%, rgba(252,113,71,0.08), transparent 50%)',
-              }}
+              data-lenis-prevent
+              className="scrollbar-panel relative min-h-0 flex-1 overflow-y-auto overscroll-contain bg-canvas px-3 py-4 sm:px-5"
             >
               {messages.length === 0 ? (
                 <div className="flex h-full flex-col items-center justify-center px-6 text-center">
                   <p className="font-display text-lg font-bold text-aubergine">Start the conversation</p>
-                  <p className="mt-2 max-w-xs text-sm leading-relaxed text-ink-70">
+                  <p className="mt-2 max-w-xs text-sm leading-relaxed text-muted">
                     Say hello — your first message opens the thread for both of you.
                   </p>
                 </div>
@@ -387,7 +384,7 @@ export default function ConversationPage() {
                         {showDay ? (
                           <div className="flex items-center gap-3 py-4">
                             <span className="h-px flex-1 bg-line" />
-                            <span className="text-[0.65rem] font-semibold uppercase tracking-eyebrow text-ink-40">
+                            <span className="text-[0.65rem] font-semibold uppercase tracking-eyebrow text-muted">
                               {formatChatDay(message.at)}
                             </span>
                             <span className="h-px flex-1 bg-line" />
@@ -423,7 +420,7 @@ export default function ConversationPage() {
                 </div>
               ) : null}
 
-              <div className="flex items-end gap-2 rounded-[14px] border border-line bg-periwinkle-tint/20 p-2 transition-[border-color,box-shadow] focus-within:border-line-strong focus-within:shadow-ring">
+              <div className="flex items-end gap-2 rounded-card border border-line bg-periwinkle-tint/20 p-2 transition-[border-color,box-shadow] focus-within:border-line-strong focus-within:shadow-ring">
                 <textarea
                   ref={composerRef}
                   value={draft}
@@ -435,7 +432,7 @@ export default function ConversationPage() {
                   placeholder={`Message ${peer?.name.split(/\s+/)[0] ?? title}…`}
                   rows={1}
                   maxLength={20000}
-                  className="max-h-40 min-h-[40px] flex-1 resize-none bg-transparent px-2.5 py-2 text-sm leading-relaxed text-aubergine outline-none placeholder:text-ink-40"
+                  className="max-h-40 min-h-[40px] flex-1 resize-none bg-transparent px-2.5 py-2 text-sm leading-relaxed text-aubergine outline-none placeholder:text-muted"
                   aria-label="Message"
                 />
                 <button
@@ -446,7 +443,7 @@ export default function ConversationPage() {
                   {isSending ? '…' : 'Send'}
                 </button>
               </div>
-              <p className="mt-2 px-1 text-[0.65rem] text-ink-40">
+              <p className="mt-2 px-1 text-[0.65rem] text-muted">
                 Enter to send · Shift+Enter for a new line
               </p>
             </form>
@@ -542,8 +539,8 @@ function MessageBubble({
           className={cn(
             'px-3.5 py-2.5 text-sm leading-relaxed shadow-soft transition-opacity',
             mine
-              ? 'rounded-[18px] rounded-br-md bg-aubergine text-canvas'
-              : 'rounded-[18px] rounded-bl-md border border-line bg-canvas text-aubergine',
+              ? 'rounded-card rounded-br-md bg-aubergine text-canvas'
+              : 'rounded-card rounded-bl-md border border-line bg-surface text-aubergine',
             grouped && mine && 'rounded-tr-[18px]',
             grouped && !mine && 'rounded-tl-[18px]',
             sending && 'opacity-70',
@@ -576,7 +573,7 @@ function MessageBubble({
         <p
           className={cn(
             'mt-1 px-1 text-[0.65rem] font-medium',
-            mine ? 'text-ink-40' : 'text-ink-40',
+            mine ? 'text-muted' : 'text-muted',
             failed && 'text-deep-coral',
           )}
         >

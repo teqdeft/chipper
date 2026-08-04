@@ -10,29 +10,47 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // PRIMARY · what the page is made of
-        canvas: '#FFFCF9', // warm white — the ground
-        coral: '#FC7147', // the lead
-        periwinkle: '#9999DD', // the cool anchor
+        // GROUNDS AND INK
+        canvas: '#FFFCF9', // page ground
+        surface: '#FFFFFF', // cards, panels, blocks
         aubergine: '#45081F', // ink — all text, dark blocks, button outline
+        muted: '#6B4451', // secondary text, labels
+        line: '#F0E9E3', // hairlines, card borders
+        'line-strong': '#DFD5CD', // input borders, hover border
 
-        // SECONDARY · one job each
-        'deep-coral': '#B8431F', // accent text only (coral fails as small type)
-        'deep-periwinkle': '#403DD6', // the "get something" button, app icon
-        'periwinkle-tint': '#E4E6FB', // anchor at low strength — surfaces
-        yellow: '#FFD98A', // "start something" button only
-        'yellow-hover': '#F7C25A',
-        'deep-periwinkle-hover': '#2F2CA6',
-        pink: '#FFBBD6', // the lift — badges, previews
-        green: '#22C88A', // status only — confirmed / verified
+        // LEAD AND ACCENTS
+        coral: '#FC7147', // the lead, logo, ISO pill, active filter
+        'deep-coral': '#B8431F', // accent text only (small coral fails)
+        yellow: '#FFD98A', // primary button, start something
+        pink: '#FFBBD6', // tag, one avatar
 
-        // Neutral ink steps derived from aubergine for restrained hierarchy
-        'ink-70': 'rgba(69, 8, 31, 0.70)',
-        'ink-55': 'rgba(69, 8, 31, 0.55)',
-        'ink-40': 'rgba(69, 8, 31, 0.40)',
-        line: 'rgba(69, 8, 31, 0.10)', // restrained border
-        'line-strong': 'rgba(69, 8, 31, 0.22)', // hover / active border
+        // COOL ANCHOR
+        periwinkle: '#9999DD', // cool blocks, light strength
+        'deep-periwinkle': '#403DD6', // download button, app icon
+        'periwinkle-tint': '#E4E6FB', // together badge, ghost hover
+
+        // TINTS
+        'coral-tint': '#FFE7DE', // avatar fill, tint surfaces
+        'yellow-tint': '#FFF3D9', // gradient end stop
+
+        // STATUS GREEN · confirm and verified only
+        green: '#22C88A', // checkmark, confirm
+        'published-green': '#0A7A50', // published status text and dot
+
+        // HOVERS
+        'yellow-hover': '#F7C25A', // primary button hover
+        'deep-periwinkle-hover': '#2F2CA6', // download hover
+
+        // Preflight hard-codes `colors.gray.400` as the placeholder colour.
+        // Point it at muted so no grey ever reaches the built CSS.
+        gray: { 400: '#6B4451' },
       },
+      // Framework defaults pulled onto the palette. Tailwind's preflight and its
+      // ring/border machinery otherwise emit gray-200 / blue-500 into the build,
+      // and the client diffs the built CSS against the tokens.
+      borderColor: { DEFAULT: '#F0E9E3' }, // line
+      ringColor: { DEFAULT: '#FC7147' }, // coral
+      ringOffsetColor: { DEFAULT: '#FFFCF9' }, // canvas
       fontFamily: {
         display: ['var(--font-bricolage)', 'ui-sans-serif', 'system-ui', 'sans-serif'],
         sans: ['var(--font-inter)', 'ui-sans-serif', 'system-ui', 'sans-serif'],
@@ -49,11 +67,16 @@ const config: Config = {
         eyebrow: '0.12em', // Inter 600 caps eyebrows/labels
       },
       borderRadius: {
-        btn: '10px', // --btn-radius
-        field: '6px', // forms — radius halved from 12 to 6
-        card: '20px',
-        'card-lg': '28px',
+        // Styleguide v6 radii — buttons 999px · cards 14px · inputs 6px
+        btn: '999px',
+        field: '6px',
+        card: '14px',
+        'card-lg': '14px', // one card radius in v6; alias kept for call sites
         pill: '999px',
+      },
+      backgroundImage: {
+        // Preview gradient — coral tint → yellow tint, 135deg. Preview and spec blocks.
+        preview: 'linear-gradient(135deg, #FFE7DE 0%, #FFF3D9 100%)',
       },
       boxShadow: {
         // Soft, aubergine-tinted. Restraint over drama.
@@ -87,11 +110,23 @@ const config: Config = {
           '0%, 100%': { transform: 'translateY(0)' },
           '50%': { transform: 'translateY(-10px)' },
         },
+        // Overlays: no travel, just a fast settle. Anything slower reads as lag
+        // on a control the user just clicked.
+        'fade-in': {
+          '0%': { opacity: '0' },
+          '100%': { opacity: '1' },
+        },
+        'zoom-in': {
+          '0%': { opacity: '0', transform: 'scale(0.97)' },
+          '100%': { opacity: '1', transform: 'scale(1)' },
+        },
       },
       animation: {
         'flow-dash': 'flow-dash 8s linear infinite',
         'fade-up': 'fade-up 0.8s cubic-bezier(0.22,1,0.36,1) both',
         drift: 'drift 9s ease-in-out infinite',
+        'fade-in': 'fade-in 180ms ease-out both',
+        'zoom-in': 'zoom-in 220ms cubic-bezier(0.22,1,0.36,1) both',
       },
     },
   },

@@ -27,23 +27,27 @@ const sections = [
 /** SCR-006 — Privacy policy placeholder. */
 export default function PrivacyPage() {
   return (
-    <div className="container-content pt-24 sm:pt-28 pb-16 sm:pb-24">
-      <PageHeader
-        eyebrow="Legal"
-        title="Privacy policy"
-        lede="How Chipper collects, uses and protects your information. Last updated: June 2026."
-      />
+    <div className="container-content page-pad-top pb-16 sm:pb-24">
+      {/* One reading column on the page axis, heading included — legal text
+          set to the full container width is unreadable. max-w-prose is 68ch. */}
+      <div className="mx-auto max-w-prose">
+        <PageHeader
+          eyebrow="Legal"
+          title="Privacy policy"
+          lede="How Chipper collects, uses and protects your information. Last updated: June 2026."
+        />
 
-      <RevealGroup className="mt-12 max-w-prose space-y-8 sm:mt-16" stagger={0.06}>
-        {sections.map((section) => (
-          <RevealItem key={section.title}>
-            <section>
-              <h2 className="font-display text-lg font-bold text-aubergine">{section.title}</h2>
-              <p className="mt-2 text-sm leading-relaxed text-ink-70 sm:text-base">{section.body}</p>
-            </section>
-          </RevealItem>
-        ))}
-      </RevealGroup>
+        <RevealGroup className="mt-12 space-y-8 sm:mt-16" stagger={0.06}>
+          {sections.map((section) => (
+            <RevealItem key={section.title}>
+              <section>
+                <h2 className="font-display text-lg font-bold text-aubergine">{section.title}</h2>
+                <p className="mt-2 text-sm leading-relaxed text-muted sm:text-base">{section.body}</p>
+              </section>
+            </RevealItem>
+          ))}
+        </RevealGroup>
+      </div>
     </div>
   );
 }

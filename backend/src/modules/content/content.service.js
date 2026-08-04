@@ -6,8 +6,32 @@ const { db } = require('../../database/connection');
 const ApiError = require('../../utils/ApiError');
 const { getPagination, buildPaginationMeta } = require('../../utils/pagination');
 const { uniqueSlug, escapeLike, parseJson } = require('../../utils/helpers');
-const { CONTENT_STATUS } = require('../../config/constants');
+const { CONTENT_STATUS, NOTIFICATION_TYPE, ENTITY_TYPE } = require('../../config/constants');
 const { publicUrlFor, describeFile, removeStoredFile } = require('../../middlewares/upload');
+const notificationService = require('../notifications/notification.service');
+
+/** Fan-out a news publish alert to members who opted into the newsletter. */
+async function notifyNewsPublished(article, actorId) {
+  if (!article?.slug) return;
+  const recipients = await db('user_settings')
+    .where('notify_newsletter', true)
+    .select('user_id');
+  const ids = recipients
+    .map((r) => r.user_id)
+    .filter((id) => Number(id) !== Number(actorId));
+  if (!ids.length) return;
+
+  await notificationService.notifyMany(ids, {
+    actorId: actorId || null,
+    type: NOTIFICATION_TYPE.NEWS_PUBLISHED,
+    title: 'New on Chipper News',
+    body: article.title,
+    link: `/news/${article.slug}`,
+    entityType: ENTITY_TYPE.NEWS,
+    entityId: article.id,
+    email: false,
+  });
+}
 
 function toNews(row, { full = false } = {}) {
   return {
@@ -27,6 +51,21 @@ function toNews(row, { full = false } = {}) {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+/**
+ * Date-only admin values are stored at UTC midnight so "today" is live for the
+ * whole calendar day. Empty date + published → now (or keep existing).
+ */
+function resolvePublishedAt({ status, incoming, existing }) {
+  if (status !== CONTENT_STATUS.PUBLISHED) {
+    if (incoming === undefined) return existing ?? null;
+    return incoming || null;
+  }
+
+  if (incoming) return incoming;
+  if (existing) return existing;
+  return db.fn.now();
 }
 
 function toPage(row) {
@@ -55,7 +94,13 @@ const contentService = {
       .orderBy('news_posts.published_at', 'desc');
 
     if (!includeDrafts) {
-      base.where('news_posts.status', CONTENT_STATUS.PUBLISHED).where('news_posts.published_at', '<=', db.fn.now());
+      // Published + already live. NULL published_at is treated as live so a
+      // bad admin save cannot hide an otherwise-published post.
+      base
+        .where('news_posts.status', CONTENT_STATUS.PUBLISHED)
+        .andWhere((qb) => {
+          qb.whereNull('news_posts.published_at').orWhere('news_posts.published_at', '<=', db.fn.now());
+        });
     } else if (query.status) {
       base.where('news_posts.status', query.status);
     }
@@ -106,6 +151,13 @@ const contentService = {
     const slug = payload.slug || (await uniqueSlug(payload.title, async (candidate) =>
       Boolean(await db('news_posts').where({ slug: candidate }).first())));
 
+    const status = payload.status || CONTENT_STATUS.DRAFT;
+    const publishedAt = resolvePublishedAt({
+      status,
+      incoming: payload.publishedAt,
+      existing: null,
+    });
+
     const [id] = await db('news_posts').insert({
       slug,
       title: payload.title,
@@ -114,15 +166,15 @@ const contentService = {
       category: payload.category || null,
       cover_image_path: file ? describeFile(file).path : null,
       author_id: user.id,
-      status: payload.status || CONTENT_STATUS.DRAFT,
+      status,
       is_featured: Boolean(payload.featured),
-      published_at:
-        (payload.status || CONTENT_STATUS.DRAFT) === CONTENT_STATUS.PUBLISHED
-          ? payload.publishedAt || db.fn.now()
-          : payload.publishedAt || null,
+      published_at: publishedAt,
     });
 
     const { article } = await this.getNews(id, { includeDrafts: true, countView: false });
+    if (status === CONTENT_STATUS.PUBLISHED) {
+      notifyNewsPublished(article, user.id).catch(() => {});
+    }
     return article;
   },
 
@@ -130,6 +182,8 @@ const contentService = {
     const existing = await db('news_posts').where({ slug }).orWhere({ id: Number(slug) || 0 }).first();
     if (!existing) throw ApiError.notFound('Article not found');
 
+    const nextStatus = payload.status !== undefined ? payload.status : existing.status;
+    const wasPublished = existing.status === CONTENT_STATUS.PUBLISHED;
     const updates = {
       title: payload.title,
       excerpt: payload.excerpt,
@@ -137,11 +191,17 @@ const contentService = {
       category: payload.category,
       status: payload.status,
       is_featured: payload.featured,
-      published_at:
-        payload.status === CONTENT_STATUS.PUBLISHED && !existing.published_at
-          ? db.fn.now()
-          : payload.publishedAt,
     };
+
+    // Only touch published_at when status/date actually change — never wipe a
+    // live timestamp with null from an empty admin date field.
+    if (payload.publishedAt !== undefined || payload.status !== undefined) {
+      updates.published_at = resolvePublishedAt({
+        status: nextStatus,
+        incoming: payload.publishedAt,
+        existing: existing.published_at,
+      });
+    }
 
     if (file) {
       updates.cover_image_path = describeFile(file).path;
@@ -152,8 +212,10 @@ const contentService = {
       .where({ id: existing.id })
       .update(Object.fromEntries(Object.entries(updates).filter(([, v]) => v !== undefined)));
 
-    void user;
     const { article } = await this.getNews(existing.id, { includeDrafts: true, countView: false });
+    if (!wasPublished && nextStatus === CONTENT_STATUS.PUBLISHED) {
+      notifyNewsPublished(article, user.id).catch(() => {});
+    }
     return article;
   },
 

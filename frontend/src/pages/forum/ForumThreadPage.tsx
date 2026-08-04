@@ -1,200 +1,369 @@
-import { useState } from 'react';
+import { FormEvent, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { PageHeader } from '@/components/ui/app/PageHeader';
 import { EmptyState } from '@/components/ui/app/EmptyState';
 import { StatusBadge } from '@/components/ui/app/StatusBadge';
+import { Avatar } from '@/components/ui/app/Avatar';
 import { FieldShell, TextTextarea } from '@/components/ui/app/FormField';
-import { Reveal, RevealGroup, RevealItem } from '@/components/ui/Reveal';
+import { ErrorState, LoadingState } from '@/components/ui/app/LoadingState';
+import { Reveal } from '@/components/ui/Reveal';
 import { useAuth } from '@/app/providers/AuthProvider';
-import { mockThreads } from '@/lib/mock';
-import { cn } from '@/lib/utils';
+import { useToast } from '@/app/providers/ToastProvider';
+import { useApiResource } from '@/hooks/useApiResource';
+import { forumApi, type ForumPost, type ForumTopicDetail } from '@/lib/api/forum';
+import { cn, formatDateTime, formatListDate } from '@/lib/utils';
 
-type MockPost = {
-  id: string;
-  author: string;
-  body: string;
-  votes: number;
-  accepted?: boolean;
-  at: string;
-};
-
-const mockPosts: Record<string, MockPost[]> = {
-  t1: [
-    {
-      id: 'p1',
-      author: 'A. Chen',
-      body: 'Looking for a citation format that includes version and licence. Does Chipper export a BibTeX entry or should we compose it manually from the design page?',
-      votes: 4,
-      at: '2026-06-01',
-    },
-    {
-      id: 'p2',
-      author: 'Dr. M. van der Berg',
-      body: 'Use the “Cite this design” block on the detail page — it includes title, version, DOI placeholder, licence and uploader. For papers I append the access date in brackets.',
-      votes: 12,
-      accepted: true,
-      at: '2026-06-02',
-    },
-    {
-      id: 'p3',
-      author: 'Moderation',
-      body: 'We are drafting a recommended citation string for ISO 22916-compliant designs. Feedback welcome in Metadata & licences.',
-      votes: 3,
-      at: '2026-06-08',
-    },
-  ],
-  t2: [
-    {
-      id: 'p4',
-      author: 'Dr. M. van der Berg',
-      body: 'Surface looks clean but bond strength is inconsistent across batches. Plasma time is 30 s at 50 W — should I extend or switch gas?',
-      votes: 2,
-      at: '2026-06-05',
-    },
-    {
-      id: 'p5',
-      author: 'A. Chen',
-      body: 'Log chamber pressure and O₂ flow. We saw similar issues when the chamber was not fully purged between runs. A 60 s O₂ step after pump-down fixed it for us.',
-      votes: 7,
-      at: '2026-06-06',
-    },
-  ],
-  t3: [
-    {
-      id: 'p6',
-      author: 'A. Chen',
-      body: 'Is the ISO 22916 checkbox enough or do I need supporting docs uploaded with the design?',
-      votes: 1,
-      at: '2026-06-03',
-    },
-  ],
-};
-
-/** SCR-026 — Forum thread with posts, reply, votes. */
+/** SCR-026 — Forum thread with posts, reply, votes and accepted answers. */
 export default function ForumThreadPage() {
   const { id } = useParams<{ id: string }>();
   const { isAuthenticated, hasPermission } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const thread = mockThreads.find((t) => t.id === id);
-  const posts = id ? mockPosts[id] ?? [] : [];
-  const [reply, setReply] = useState('');
-  const [votes, setVotes] = useState<Record<string, number>>(() =>
-    Object.fromEntries(posts.map((p) => [p.id, p.votes])),
+  const toast = useToast();
+
+  const { data, isLoading, error, reload, setData } = useApiResource(
+    () => forumApi.getTopic(id!, { limit: 50 }),
+    [id],
+    { enabled: Boolean(id) },
   );
 
-  const canReply = isAuthenticated && hasPermission('forum.post');
+  // Keep a live ref so reply/vote handlers never append against a stale snapshot.
+  const dataRef = useRef(data);
+  dataRef.current = data;
+
+  const [reply, setReply] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [votingId, setVotingId] = useState<number | null>(null);
+  const [acceptingId, setAcceptingId] = useState<number | null>(null);
+  const [subscribing, setSubscribing] = useState(false);
+
+  const topic = data?.topic;
+  const posts = data?.posts ?? [];
+  const viewer = data?.viewer;
+
+  const canReply =
+    Boolean(viewer?.canReply) && isAuthenticated && hasPermission('forum.post');
   const canVote = isAuthenticated && hasPermission('forum.vote');
+  const canAccept = Boolean(viewer?.canAcceptAnswer);
+  const isLocked = topic?.status === 'locked';
 
-  if (!thread) {
-    return (
-      <div className="container-content">
-        <Reveal>
-          <EmptyState
-            title="Topic not found"
-            body="This thread may have been removed or the link is incorrect."
-            actionLabel="Back to forum"
-            actionTo="/forum"
-          />
-        </Reveal>
-      </div>
-    );
-  }
-
-  const bumpVote = (postId: string, delta: number) => {
-    // Guests are funnelled to sign-in and come back to this thread afterwards.
+  async function handleVote(post: ForumPost, value: 1 | -1) {
     if (!canVote) {
       navigate('/login', { state: { from: location } });
       return;
     }
-    setVotes((prev) => ({ ...prev, [postId]: (prev[postId] ?? 0) + delta }));
-  };
+    if (votingId === post.id) return;
+
+    setVotingId(post.id);
+    try {
+      const result = await forumApi.vote(post.id, value);
+      const current = dataRef.current;
+      if (!current) return;
+      setData({
+        ...current,
+        posts: current.posts.map((p) =>
+          p.id === post.id
+            ? { ...p, votes: result.score, upvotes: result.upvotes, downvotes: result.downvotes, myVote: result.myVote }
+            : p,
+        ),
+      });
+    } catch (err) {
+      toast.fromError(err);
+    } finally {
+      setVotingId(null);
+    }
+  }
+
+  async function handleAccept(post: ForumPost) {
+    if (!topic || !canAccept || acceptingId) return;
+    setAcceptingId(post.id);
+    try {
+      const result = await forumApi.acceptAnswer(topic.slug || topic.id, post.id);
+      const current = dataRef.current;
+      if (!current) return;
+
+      setData({
+        ...current,
+        topic: {
+          ...current.topic,
+          status: result.status,
+          solved: result.accepted,
+          acceptedPostId: result.accepted ? post.id : null,
+        },
+        posts: current.posts.map((p) => ({
+          ...p,
+          isAccepted: result.accepted ? p.id === post.id : false,
+        })),
+      });
+      toast.success(
+        result.accepted ? 'Answer accepted' : 'Acceptance cleared',
+        result.accepted ? 'This topic is now marked solved.' : 'The topic is open again.',
+      );
+    } catch (err) {
+      toast.fromError(err);
+    } finally {
+      setAcceptingId(null);
+    }
+  }
+
+  async function handleSubscribe() {
+    if (!topic || !isAuthenticated || subscribing) return;
+    setSubscribing(true);
+    try {
+      const result = await forumApi.toggleSubscription(topic.slug || topic.id);
+      const current = dataRef.current;
+      if (!current) return;
+      setData({ ...current, topic: { ...current.topic, subscribed: result.subscribed } });
+      toast.success(
+        result.subscribed ? 'Subscribed' : 'Unsubscribed',
+        result.subscribed
+          ? 'You will be notified about new replies.'
+          : 'You will no longer get notifications for this thread.',
+      );
+    } catch (err) {
+      toast.fromError(err);
+    } finally {
+      setSubscribing(false);
+    }
+  }
+
+  async function handleReply(e: FormEvent) {
+    e.preventDefault();
+    if (!topic || !reply.trim() || submitting) return;
+
+    setSubmitting(true);
+    try {
+      const post = await forumApi.createPost(topic.slug || topic.id, reply.trim());
+      const current = dataRef.current;
+      if (!current || !post) {
+        await reload();
+      } else {
+        const next: ForumTopicDetail = {
+          ...current,
+          topic: {
+            ...current.topic,
+            replies: current.topic.replies + 1,
+            subscribed: true,
+          },
+          // Avoid a duplicate row if the same post is already present.
+          posts: current.posts.some((p) => p.id === post.id)
+            ? current.posts
+            : [...current.posts, post],
+        };
+        setData(next);
+      }
+      setReply('');
+      toast.success('Reply posted', 'Thanks for contributing to the conversation.');
+    } catch (err) {
+      toast.fromError(err);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="container-content">
+        <LoadingState label="Loading conversation…" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="container-content">
+        <ErrorState error={error} onRetry={reload} />
+      </div>
+    );
+  }
+
+  if (!topic) {
+    return (
+      <div className="container-content">
+        <EmptyState
+          title="Topic not found"
+          body="This thread may have been removed or the link is incorrect."
+          actionLabel="Back to forum"
+          actionTo="/forum"
+        />
+      </div>
+    );
+  }
 
   return (
-    <div className="container-content space-y-8">
+    <div className="container-content max-w-3xl space-y-8">
       <PageHeader
-        eyebrow={thread.category}
-        title={thread.title}
-        lede={thread.excerpt}
+        eyebrow={topic.category?.name ?? 'Forum'}
+        title={topic.title}
+        lede={topic.excerpt ?? undefined}
         actions={
-          <Link to={`/forum/${thread.categorySlug}`} className="btn-ghost text-sm">
-            Back to category
-          </Link>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap">
+            {isAuthenticated ? (
+              <button
+                type="button"
+                className="btn-ghost text-sm"
+                disabled={subscribing}
+                onClick={() => void handleSubscribe()}
+              >
+                {topic.subscribed ? 'Unsubscribe' : 'Subscribe'}
+              </button>
+            ) : null}
+            <Link to={`/forum/${topic.categorySlug || topic.category?.slug}`} className="btn-ghost text-sm">
+              Back to space
+            </Link>
+          </div>
         }
       />
 
       <Reveal delay={0.06}>
         <div className="flex flex-wrap items-center gap-2">
-          {thread.status === 'solved' ? <StatusBadge tone="green">Solved</StatusBadge> : null}
-          {thread.status === 'open' ? <StatusBadge tone="coral">Open</StatusBadge> : null}
-          {thread.status === 'locked' ? <StatusBadge tone="ink">Locked</StatusBadge> : null}
-          {thread.pinned ? <StatusBadge tone="yellow">Pinned</StatusBadge> : null}
-          <span className="text-sm text-ink-55">
-            {thread.views} views · {thread.replies} replies · started by {thread.author}
+          {topic.status === 'solved' || topic.solved ? (
+            <StatusBadge tone="green">Solved</StatusBadge>
+          ) : null}
+          {topic.status === 'open' && !topic.solved ? (
+            <StatusBadge tone="coral">Open</StatusBadge>
+          ) : null}
+          {isLocked ? <StatusBadge tone="ink">Locked</StatusBadge> : null}
+          {topic.pinned ? <StatusBadge tone="yellow">Pinned</StatusBadge> : null}
+          {topic.type === 'question' ? <StatusBadge tone="periwinkle">Question</StatusBadge> : null}
+          {topic.type === 'discussion' ? <StatusBadge tone="periwinkle">Discussion</StatusBadge> : null}
+          <span className="text-sm text-muted">
+            {topic.views} views · {topic.replies} replies · started by {topic.author?.name}
           </span>
         </div>
+
+        {topic.tags?.length ? (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {topic.tags.map((tag) => (
+              <span
+                key={tag}
+                className="rounded-full border border-line bg-periwinkle-tint/40 px-2.5 py-0.5 text-xs font-medium text-muted"
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+        ) : null}
       </Reveal>
 
-      <RevealGroup className="space-y-4" stagger={0.06}>
-        {posts.map((post, index) => (
-          <RevealItem key={post.id} as="article">
+      {/*
+        Posts are a live list — do not wrap them in RevealGroup/whileInView.
+        New RevealItems mount after the parent has already finished its one-shot
+        "show" animation and stay stuck at opacity: 0 until a full refresh.
+      */}
+      <div className="space-y-4">
+        {posts.map((post) => (
+          <article key={post.id}>
             <div
               className={cn(
-                'card overflow-hidden',
-                post.accepted && 'border-green/40 ring-1 ring-green/20',
+                'overflow-hidden rounded-card border border-line bg-surface shadow-soft',
+                post.isAccepted && 'border-green/40 ring-1 ring-green/20',
               )}
             >
-            <div className="flex gap-4 p-5 sm:gap-6">
-              <div className="flex flex-col items-center gap-1">
-                <button
-                  type="button"
-                  className="flex h-8 w-8 items-center justify-center rounded-field border border-line text-sm font-bold text-ink-55 transition-colors hover:border-deep-coral hover:text-deep-coral"
-                  aria-label="Upvote"
-                  onClick={() => bumpVote(post.id, 1)}
-                >
-                  ▲
-                </button>
-                <span className="text-sm font-bold tabular-nums text-aubergine">{votes[post.id] ?? post.votes}</span>
-                <button
-                  type="button"
-                  className="flex h-8 w-8 items-center justify-center rounded-field border border-line text-sm font-bold text-ink-55 transition-colors hover:border-deep-coral hover:text-deep-coral"
-                  aria-label="Downvote"
-                  onClick={() => bumpVote(post.id, -1)}
-                >
-                  ▼
-                </button>
-              </div>
-
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-semibold text-aubergine">{post.author}</span>
-                  {index === 0 ? <StatusBadge tone="periwinkle">Original post</StatusBadge> : null}
-                  {post.accepted ? <StatusBadge tone="green">Accepted answer</StatusBadge> : null}
-                  <span className="text-xs text-ink-40">{post.at}</span>
+              <div className="flex gap-3 p-4 sm:gap-5 sm:p-5">
+                <div className="flex flex-col items-center gap-1 pt-1">
+                  <button
+                    type="button"
+                    disabled={votingId === post.id}
+                    className={cn(
+                      'flex h-8 w-8 items-center justify-center rounded-field border text-sm font-bold transition-colors',
+                      post.myVote === 1
+                        ? 'border-deep-coral bg-coral/15 text-deep-coral'
+                        : 'border-line text-muted hover:border-deep-coral hover:text-deep-coral',
+                    )}
+                    aria-label="Upvote"
+                    onClick={() => void handleVote(post, 1)}
+                  >
+                    ▲
+                  </button>
+                  <span className="text-sm font-bold tabular-nums text-aubergine">{post.votes}</span>
+                  <button
+                    type="button"
+                    disabled={votingId === post.id}
+                    className={cn(
+                      'flex h-8 w-8 items-center justify-center rounded-field border text-sm font-bold transition-colors',
+                      post.myVote === -1
+                        ? 'border-aubergine bg-aubergine/10 text-aubergine'
+                        : 'border-line text-muted hover:border-aubergine hover:text-aubergine',
+                    )}
+                    aria-label="Downvote"
+                    onClick={() => void handleVote(post, -1)}
+                  >
+                    ▼
+                  </button>
                 </div>
-                <p className="mt-3 text-sm leading-relaxed text-ink-70">{post.body}</p>
+
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Avatar
+                      name={post.author?.name ?? 'Member'}
+                      src={post.author?.avatarUrl}
+                      className="h-8 w-8 text-[10px]"
+                    />
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {post.author?.handle ? (
+                          <Link
+                            to={`/u/${post.author.handle}`}
+                            className="font-semibold text-aubergine hover:text-deep-coral"
+                          >
+                            {post.author.name}
+                          </Link>
+                        ) : (
+                          <span className="font-semibold text-aubergine">{post.author?.name}</span>
+                        )}
+                        {post.isFirstPost ? (
+                          <StatusBadge tone="periwinkle">Original post</StatusBadge>
+                        ) : null}
+                        {post.isAccepted ? (
+                          <StatusBadge tone="green">Accepted answer</StatusBadge>
+                        ) : null}
+                      </div>
+                      <p className="text-xs text-muted">
+                        {formatDateTime(post.at) || formatListDate(post.at)}
+                        {post.editedAt ? ' · edited' : ''}
+                      </p>
+                    </div>
+                  </div>
+
+                  <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-muted">
+                    {post.body}
+                  </p>
+
+                  {canAccept && !post.isFirstPost ? (
+                    <div className="mt-4">
+                      <button
+                        type="button"
+                        disabled={acceptingId === post.id}
+                        onClick={() => void handleAccept(post)}
+                        className="text-xs font-semibold text-deep-coral hover:underline disabled:opacity-50"
+                      >
+                        {post.isAccepted ? 'Clear accepted answer' : 'Accept as answer'}
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
               </div>
             </div>
-            </div>
-          </RevealItem>
+          </article>
         ))}
-      </RevealGroup>
+      </div>
 
-      {thread.status === 'locked' ? (
+      {isLocked ? (
         <Reveal delay={0.1}>
-          <p className="rounded-[16px] border border-line bg-periwinkle-tint/40 px-4 py-3 text-sm text-ink-55">
+          <p className="rounded-card border border-line bg-periwinkle-tint/40 px-4 py-3 text-sm text-muted">
             This thread is locked. New replies are disabled.
           </p>
         </Reveal>
       ) : !canReply ? (
         <Reveal delay={0.1}>
-          <div className="card p-5 sm:p-6">
+          <div className="rounded-card border border-line bg-surface p-5 shadow-soft sm:p-6">
             <h2 className="font-display text-base font-bold text-aubergine">Join the conversation</h2>
-            <p className="mt-2 text-sm leading-relaxed text-ink-70">
-              You need an account to reply, vote and ask questions. Browsing stays free — sign in to
-              take part.
+            <p className="mt-2 text-sm leading-relaxed text-muted">
+              You need a verified account to reply, vote and ask questions. Browsing stays free —
+              sign in to take part.
             </p>
-            <div className="mt-4 flex flex-wrap gap-3">
+            <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
               <Link to="/login" state={{ from: location }} className="btn-primary text-sm">
                 Sign in to reply
               </Link>
@@ -207,28 +376,30 @@ export default function ForumThreadPage() {
       ) : (
         <Reveal delay={0.1}>
           <form
-            className="card p-5 sm:p-6"
-            onSubmit={(e) => {
-              e.preventDefault();
-              setReply('');
-            }}
+            className="rounded-card border border-line bg-surface p-5 shadow-soft sm:p-6"
+            onSubmit={(e) => void handleReply(e)}
           >
-          <h2 className="font-display text-base font-bold text-aubergine">Reply to thread</h2>
-          <div className="mt-4">
-            <FieldShell label="Your reply" hint="Markdown is not enabled in this preview.">
-              <TextTextarea
-                value={reply}
-                onChange={(e) => setReply(e.target.value)}
-                placeholder="Share your experience or ask a follow-up…"
-                rows={5}
-              />
-            </FieldShell>
-          </div>
-          <div className="mt-4 flex justify-end">
-            <button type="submit" className="btn-primary text-sm" disabled={!reply.trim()}>
-              Post reply
-            </button>
-          </div>
+            <h2 className="font-display text-base font-bold text-aubergine">Reply to thread</h2>
+            <div className="mt-4">
+              <FieldShell label="Your reply" hint="Share experience, steps, or a clear follow-up.">
+                <TextTextarea
+                  value={reply}
+                  onChange={(e) => setReply(e.target.value)}
+                  placeholder="Share your experience or ask a follow-up…"
+                  rows={5}
+                  required
+                />
+              </FieldShell>
+            </div>
+            <div className="mt-4 flex justify-end">
+              <button
+                type="submit"
+                className="btn-primary text-sm"
+                disabled={!reply.trim() || submitting}
+              >
+                {submitting ? 'Posting…' : 'Post reply'}
+              </button>
+            </div>
           </form>
         </Reveal>
       )}

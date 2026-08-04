@@ -20,7 +20,7 @@ export default function Stats() {
           </Reveal>
         </div>
 
-        <div className="grid grid-cols-1 gap-px overflow-hidden rounded-[16px] border border-white/10 bg-white/10 sm:grid-cols-3 sm:rounded-card">
+        <div className="grid grid-cols-1 gap-px overflow-hidden rounded-card border border-canvas/10 bg-canvas/10 sm:grid-cols-3">
           {stats.figures.map((fig) => (
             <div key={fig.label} className="bg-aubergine p-6 sm:p-8">
               <div className="font-display text-5xl font-extrabold leading-none text-coral sm:text-6xl">

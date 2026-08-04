@@ -16,7 +16,7 @@ function ApplicationCard({
     <article className="card card-hover flex h-full flex-col gap-2.5 p-5 sm:gap-3 sm:p-7">
       <span className="data-unit text-sm tabular-nums">0{index + 1}</span>
       <h3 className="font-display text-lg font-bold text-aubergine sm:text-xl">{card.title}</h3>
-      <p className="text-[0.92rem] leading-relaxed text-ink-70 sm:text-[0.95rem]">{card.body}</p>
+      <p className="text-[0.92rem] leading-relaxed text-muted sm:text-[0.95rem]">{card.body}</p>
     </article>
   );
 }

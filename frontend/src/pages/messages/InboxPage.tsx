@@ -59,7 +59,7 @@ export default function InboxPage() {
 
       <Reveal delay={0.04}>
         <div
-          className="inline-flex rounded-[12px] border border-line bg-periwinkle-tint/30 p-1"
+          className="inline-flex rounded-btn border border-line bg-periwinkle-tint/30 p-1"
           role="tablist"
           aria-label="Message folders"
         >
@@ -71,10 +71,10 @@ export default function InboxPage() {
               aria-selected={tab === key}
               onClick={() => setTab(key)}
               className={cn(
-                'rounded-[10px] px-4 py-2 text-sm font-semibold capitalize transition-colors',
+                'rounded-btn px-4 py-2 text-sm font-semibold capitalize transition-colors',
                 tab === key
                   ? 'bg-canvas text-aubergine shadow-soft'
-                  : 'text-ink-55 hover:text-aubergine',
+                  : 'text-muted hover:text-aubergine',
               )}
             >
               {key}
@@ -105,7 +105,7 @@ export default function InboxPage() {
         </Reveal>
       ) : (
         <RevealGroup
-          className="overflow-hidden rounded-[18px] border border-line bg-canvas shadow-soft sm:rounded-card"
+          className="overflow-hidden rounded-card border border-line bg-surface shadow-soft"
           stagger={0.04}
         >
           {conversations.map((conversation) => (
@@ -175,7 +175,7 @@ function ConversationRow({
             <span
               className={cn(
                 'truncate font-display text-[0.95rem]',
-                unread ? 'font-bold text-aubergine' : 'font-semibold text-ink-70',
+                unread ? 'font-bold text-aubergine' : 'font-semibold text-muted',
               )}
             >
               {conversation.with}
@@ -183,7 +183,7 @@ function ConversationRow({
             <span
               className={cn(
                 'shrink-0 text-[0.7rem] tabular-nums',
-                unread ? 'font-semibold text-deep-coral' : 'text-ink-40',
+                unread ? 'font-semibold text-deep-coral' : 'text-muted',
               )}
             >
               {formatListDate(conversation.updatedAt)}
@@ -191,17 +191,17 @@ function ConversationRow({
           </span>
 
           {conversation.subject ? (
-            <span className="mt-0.5 block truncate text-xs font-medium text-ink-55">
+            <span className="mt-0.5 block truncate text-xs font-medium text-muted">
               {conversation.subject}
             </span>
           ) : peer?.handle ? (
-            <span className="mt-0.5 block truncate text-xs text-ink-40">@{peer.handle}</span>
+            <span className="mt-0.5 block truncate text-xs text-muted">@{peer.handle}</span>
           ) : null}
 
           <span
             className={cn(
               'mt-1 line-clamp-1 block text-sm leading-snug',
-              unread ? 'font-medium text-aubergine' : 'text-ink-55',
+              unread ? 'font-medium text-aubergine' : 'text-muted',
             )}
           >
             {preview}

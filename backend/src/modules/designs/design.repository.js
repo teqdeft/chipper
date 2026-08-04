@@ -199,6 +199,38 @@ class DesignRepository extends BaseRepository {
     return q;
   }
 
+  /**
+   * Newest not-yet-live version per design, keyed by design id.
+   *
+   * A published design can have a draft queued behind it — the version branched
+   * by an edit or by "new version". "My designs" needs it because the row's own
+   * status still reads `published`, so without this the draft is invisible and
+   * submitting the design would re-submit the live version instead.
+   */
+  async unpublishedVersionsByDesign(designIds = [], trx) {
+    if (!designIds.length) return {};
+
+    const rows = await (trx || db)('design_versions')
+      .join('designs', 'designs.id', 'design_versions.design_id')
+      .whereIn('design_versions.design_id', designIds)
+      .whereIn('design_versions.status', [DESIGN_STATUS.DRAFT, DESIGN_STATUS.PENDING])
+      .whereRaw('(designs.current_version_id is null or design_versions.id <> designs.current_version_id)')
+      .orderBy('design_versions.version_number', 'desc')
+      .select(
+        'design_versions.id',
+        'design_versions.design_id',
+        'design_versions.version',
+        'design_versions.status',
+      );
+
+    const byDesign = {};
+    // Ordered newest-first, so the first row seen per design is the one to show.
+    for (const row of rows) {
+      if (!(row.design_id in byDesign)) byDesign[row.design_id] = row;
+    }
+    return byDesign;
+  }
+
   findVersion(designId, versionIdOrLabel, trx) {
     const q = (trx || db)('design_versions')
       .leftJoin('licenses', 'design_versions.license_id', 'licenses.id')
@@ -249,8 +281,15 @@ class DesignRepository extends BaseRepository {
       .select('*');
   }
 
+  /**
+   * By numeric id or uuid — the serializer hands clients the uuid, so that is
+   * what comes back in a delete, while internal callers hold the numeric id.
+   */
   findFile(fileId, trx) {
-    return (trx || db)('design_files').where({ id: fileId }).first();
+    const q = (trx || db)('design_files');
+    return Number.isFinite(Number(fileId))
+      ? q.where({ id: Number(fileId) }).first()
+      : q.where({ uuid: fileId }).first();
   }
 
   addFiles(rows, trx) {

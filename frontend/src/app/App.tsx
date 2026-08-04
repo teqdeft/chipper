@@ -32,6 +32,7 @@ import DownloadGatePage from '@/pages/designs/DownloadGatePage';
 import UploadWizardPage from '@/pages/upload/UploadWizardPage';
 import MyDesignsPage from '@/pages/upload/MyDesignsPage';
 import EditDesignPage from '@/pages/upload/EditDesignPage';
+import NewVersionPage from '@/pages/upload/NewVersionPage';
 import ForumHomePage from '@/pages/forum/ForumHomePage';
 import ForumCategoryPage from '@/pages/forum/ForumCategoryPage';
 import ForumThreadPage from '@/pages/forum/ForumThreadPage';
@@ -116,6 +117,9 @@ export default function App() {
                 </Route>
                 <Route element={<RequireAccess screen="my-designs/edit" />}>
                   <Route path="my-designs/:id/edit" element={<EditDesignPage />} />
+                </Route>
+                <Route element={<RequireAccess screen="my-designs/new-version" />}>
+                  <Route path="my-designs/:id/new-version" element={<NewVersionPage />} />
                 </Route>
 
                 {/* ── Forum — SCR-024..028 readable by all, posting is User+ ─ */}

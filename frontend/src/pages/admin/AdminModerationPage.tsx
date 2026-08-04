@@ -106,7 +106,7 @@ export default function AdminModerationPage() {
           ))}
         </TextSelect>
         {summary ? (
-          <p className="text-xs text-ink-55">
+          <p className="text-xs text-muted">
             {summary.open} open · {summary.reviewing} reviewing · {summary.resolved} resolved ·{' '}
             {summary.dismissed} dismissed
             {summary.pendingDesigns > 0 ? (
@@ -152,11 +152,11 @@ export default function AdminModerationPage() {
                           {report.entity?.label ?? '[content removed]'}
                         </span>
                       </div>
-                      <p className="mt-2 text-sm text-ink-55">
+                      <p className="mt-2 text-sm text-muted">
                         <span className="font-semibold capitalize">{report.reason}</span>
                         {report.details ? ` — ${report.details}` : ''}
                       </p>
-                      <p className="mt-2 text-xs text-ink-40">
+                      <p className="mt-2 text-xs text-muted">
                         Reported by {report.reporter ? `@${report.reporter.handle}` : 'system'} ·{' '}
                         {new Date(report.createdAt).toLocaleDateString()}
                         {report.handledBy ? ` · handled by ${report.handledBy} (${report.resolution})` : ''}
@@ -182,7 +182,7 @@ export default function AdminModerationPage() {
                               className={
                                 destructive
                                   ? 'rounded-field border border-deep-coral/40 bg-coral/10 px-3 py-1.5 text-xs font-semibold text-deep-coral hover:bg-coral/20 disabled:opacity-40'
-                                  : 'rounded-field border border-line px-3 py-1.5 text-xs font-semibold text-ink-70 hover:bg-periwinkle-tint/50 disabled:opacity-40'
+                                  : 'rounded-field border border-line px-3 py-1.5 text-xs font-semibold text-muted hover:bg-periwinkle-tint/50 disabled:opacity-40'
                               }
                               onClick={() => void resolve(report, action)}
                             >

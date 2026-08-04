@@ -30,7 +30,7 @@ function AccessPending() {
     <div className="container-content flex min-h-[50vh] items-center justify-center">
       <div className="flex flex-col items-center gap-3" role="status" aria-live="polite">
         <span className="h-8 w-8 animate-spin rounded-full border-2 border-line border-t-coral" />
-        <p className="text-sm text-ink-70">Checking your access…</p>
+        <p className="text-sm text-muted">Checking your access…</p>
       </div>
     </div>
   );

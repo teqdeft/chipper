@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { EmptyState } from '@/components/ui/app/EmptyState';
+import { Avatar } from '@/components/ui/app/Avatar';
 import { StatusBadge } from '@/components/ui/app/StatusBadge';
 import { FieldShell, TextSelect, TextTextarea } from '@/components/ui/app/FormField';
 import { ErrorState, LoadingState } from '@/components/ui/app/LoadingState';
 import { Reveal, RevealGroup, RevealItem } from '@/components/ui/Reveal';
+import DesignGallery from '@/components/designs/DesignGallery';
 import { useApiResource } from '@/hooks/useApiResource';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { useToast } from '@/app/providers/ToastProvider';
@@ -62,9 +64,11 @@ function typeSpecificRows(version: DesignVersion | null): [string, string][] {
 function MetaRow({ label, value }: { label: string; value: ReactNode }) {
   if (value == null || value === '') return null;
   return (
-    <div className="flex justify-between gap-4 border-b border-line pb-3 last:border-0 last:pb-0">
-      <dt className="text-sm text-ink-55">{label}</dt>
-      <dd className="text-right text-sm font-semibold text-aubergine">{value}</dd>
+    <div className="flex items-baseline justify-between gap-5 border-b border-line/80 py-2.5 first:pt-0 last:border-0 last:pb-0">
+      <dt className="shrink-0 text-[0.8rem] tracking-wide text-muted">{label}</dt>
+      <dd className="min-w-0 break-words text-right text-sm font-semibold leading-snug text-aubergine">
+        {value}
+      </dd>
     </div>
   );
 }
@@ -202,17 +206,17 @@ export default function DesignDetailPage() {
     <div className="container-content space-y-10">
       <Reveal>
         <div className="flex flex-wrap items-center gap-2 text-sm">
-          <Link to="/designs" className="font-medium text-ink-70 hover:text-deep-coral">
+          <Link to="/designs" className="font-medium text-muted hover:text-deep-coral">
             ← Browse
           </Link>
-          <span className="text-ink-40">/</span>
+          <span className="text-muted">/</span>
           <span className="truncate text-aubergine">{design.title}</span>
         </div>
       </Reveal>
 
       {isMock ? (
         <Reveal delay={0.02}>
-          <p className="rounded-field border border-line bg-periwinkle-tint/30 px-4 py-3 text-sm text-ink-70">
+          <p className="rounded-field border border-line bg-periwinkle-tint/30 px-4 py-3 text-sm text-muted">
             <span className="font-semibold text-deep-periwinkle">Demo design.</span> This is sample
             content shipped with the app — it has no stored files, so download, starring and comments
             are switched off here.
@@ -223,11 +227,13 @@ export default function DesignDetailPage() {
       {/* Maker-first header — style guide §012 */}
       <Reveal delay={0.04} className="space-y-5">
         <div className="flex flex-wrap items-center gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-coral font-display text-sm font-bold text-aubergine">
-            {(design.authorName || '?').slice(0, 1)}
-          </span>
+          <Avatar
+            name={design.authorName || '?'}
+            src={design.author?.avatarUrl}
+            className="h-10 w-10 border-0 bg-coral font-display text-sm"
+          />
           <div className="min-w-0">
-            <p className="text-sm text-ink-70">
+            <p className="text-sm text-muted">
               by{' '}
               <Link
                 to={`/u/${design.authorHandle}`}
@@ -250,13 +256,25 @@ export default function DesignDetailPage() {
                 <span className="pill bg-periwinkle-tint text-deep-periwinkle">{current.version}</span>
               ) : null}
             </div>
-            <p className="mt-3 text-base leading-relaxed text-ink-70">{design.summary}</p>
+            <p className="mt-3 text-base leading-relaxed text-muted">{design.summary}</p>
           </div>
 
-          <div className="flex flex-wrap gap-3">
+          {/* Two per line on a phone — this row runs to four buttons for an
+              owner, and four full-width bars push the content off the screen.
+              w-full because the row is a flex item of the wrapping header
+              above; without it the box shrinks to fit and the grid gains
+              nothing. sm: hands the width back to the content. */}
+          <div className="grid w-full grid-cols-2 gap-3 sm:flex sm:w-auto sm:flex-wrap">
             {isOwner ? (
               <Link to={`/my-designs/${design.slug}/edit`} className="btn-ghost">
                 Edit
+              </Link>
+            ) : null}
+            {/* Versioning is only offered once something is live — a draft is
+                edited in place instead. */}
+            {isOwner && design.status === 'published' ? (
+              <Link to={`/my-designs/${design.slug}/new-version`} className="btn-ghost">
+                New version
               </Link>
             ) : null}
             <Link to={`/designs/${encodeURIComponent(design.slug)}/view`} className="btn-ghost">
@@ -276,7 +294,7 @@ export default function DesignDetailPage() {
 
         <div className="flex flex-wrap items-center gap-2">
           <StatusBadge tone={statusTone(design.status)}>{statusLabel(design.status)}</StatusBadge>
-          <span className="text-sm text-ink-55">
+          <span className="text-sm text-muted">
             Reused <span className="data-unit">{design.downloads}×</span>
           </span>
           <button
@@ -287,7 +305,7 @@ export default function DesignDetailPage() {
               'inline-flex items-center gap-1 rounded-pill border px-2.5 py-1 text-sm transition-colors',
               starred
                 ? 'border-coral bg-coral/15 text-deep-coral'
-                : 'border-line text-ink-55 hover:border-line-strong',
+                : 'border-line text-muted hover:border-line-strong',
               isMock && 'pointer-events-none opacity-45',
             )}
             aria-pressed={starred}
@@ -321,30 +339,14 @@ export default function DesignDetailPage() {
         </div>
       </Reveal>
 
-      <div className="grid gap-8 lg:grid-cols-[1.4fr_1fr]">
-        <Reveal delay={0.08} className="space-y-6">
-          <RevealGroup className="card overflow-hidden" stagger={0.05}>
-            <div className="grid grid-cols-2 gap-px bg-line sm:grid-cols-3">
-              {[1, 2, 3, 4, 5, 6].map((n) => (
-                <RevealItem
-                  key={n}
-                  className={cn(
-                    'flex aspect-square items-center justify-center bg-gradient-to-br from-periwinkle-tint/50 to-coral/10 transition-transform duration-500 ease-premium hover:scale-[1.02]',
-                    n === 1 && 'col-span-2 row-span-2 sm:col-span-2 sm:row-span-2',
-                  )}
-                >
-                  <span className="text-xs font-semibold uppercase tracking-wider text-ink-40">
-                    {n === 1 ? '3D preview' : `Gallery ${n}`}
-                  </span>
-                </RevealItem>
-              ))}
-            </div>
-          </RevealGroup>
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(340px,1fr)] lg:gap-8 xl:gap-10">
+        <Reveal delay={0.08} className="min-w-0 space-y-6">
+          <DesignGallery files={files} slug={design.slug} isMock={isMock} />
 
           {current?.description ? (
             <section className="card p-5 sm:p-6">
               <h2 className="font-display text-lg font-bold text-aubergine">Description</h2>
-              <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-ink-70">
+              <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-muted">
                 {current.description}
               </p>
             </section>
@@ -368,9 +370,9 @@ export default function DesignDetailPage() {
                 </FieldShell>
               ) : null}
             </div>
-            <p className="mt-1 text-xs text-ink-55">All metadata below is version-tracked.</p>
+            <p className="mt-1 text-xs text-muted">All metadata below is version-tracked.</p>
             {files.length === 0 ? (
-              <p className="mt-4 text-sm text-ink-55">No files attached to this version yet.</p>
+              <p className="mt-4 text-sm text-muted">No files attached to this version yet.</p>
             ) : (
               <ul className="mt-4 divide-y divide-line">
                 {files.map((file) => (
@@ -380,7 +382,7 @@ export default function DesignDetailPage() {
                   >
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold text-aubergine">{file.name}</p>
-                      <p className="text-xs text-ink-55">
+                      <p className="text-xs text-muted">
                         {file.type} · {file.size}
                         {file.isPrimary ? ' · primary' : ''}
                       </p>
@@ -417,7 +419,7 @@ export default function DesignDetailPage() {
             !howToUse?.exclusionZones &&
             !flow &&
             !pressure ? (
-              <p className="mt-2 text-sm text-ink-55">
+              <p className="mt-2 text-sm text-muted">
                 No operating guidance declared for this version.
               </p>
             ) : null}
@@ -441,9 +443,9 @@ export default function DesignDetailPage() {
               <h2 className="font-display text-lg font-bold text-aubergine">Published work</h2>
               <ul className="mt-4 space-y-4">
                 {current.publishedWorks.map((work) => (
-                  <li key={work.title} className="rounded-field border border-line bg-canvas p-4">
+                  <li key={work.title} className="rounded-field border border-line bg-surface p-4">
                     <p className="text-sm font-semibold text-aubergine">{work.title}</p>
-                    <p className="mt-1 text-sm text-ink-70">
+                    <p className="mt-1 text-sm text-muted">
                       {[work.authors, work.publication, work.year].filter(Boolean).join(' · ')}
                     </p>
                     {work.doi ? <p className="mt-1 text-xs text-deep-coral">DOI: {work.doi}</p> : null}
@@ -465,7 +467,7 @@ export default function DesignDetailPage() {
                     <div>
                       <p className="text-sm font-semibold text-aubergine">{doc.title}</p>
                       {doc.description ? (
-                        <p className="mt-0.5 text-xs text-ink-55">{doc.description}</p>
+                        <p className="mt-0.5 text-xs text-muted">{doc.description}</p>
                       ) : null}
                     </div>
                     {doc.documentType ? <span className="pill shrink-0">{doc.documentType}</span> : null}
@@ -481,17 +483,17 @@ export default function DesignDetailPage() {
             </h2>
 
             {isMock ? (
-              <p className="mt-4 text-sm text-ink-55">Comments are disabled on demo designs.</p>
+              <p className="mt-4 text-sm text-muted">Comments are disabled on demo designs.</p>
             ) : comments.isLoading ? (
-              <p className="mt-4 text-sm text-ink-55">Loading comments…</p>
+              <p className="mt-4 text-sm text-muted">Loading comments…</p>
             ) : (
               <RevealGroup className="mt-4 space-y-4" stagger={0.06}>
                 {(comments.data?.items ?? []).length === 0 ? (
-                  <p className="text-sm text-ink-55">No comments yet — start the conversation.</p>
+                  <p className="text-sm text-muted">No comments yet — start the conversation.</p>
                 ) : (
                   (comments.data?.items ?? []).map((comment) => (
                     <RevealItem key={comment.id}>
-                      <div className="rounded-field border border-line bg-canvas p-4">
+                      <div className="rounded-field border border-line bg-surface p-4">
                         <div className="flex items-center justify-between gap-2">
                           <Link
                             to={`/u/${comment.author.handle}`}
@@ -499,9 +501,9 @@ export default function DesignDetailPage() {
                           >
                             {comment.author.name}
                           </Link>
-                          <span className="text-xs text-ink-55">{formatListDate(comment.at)}</span>
+                          <span className="text-xs text-muted">{formatListDate(comment.at)}</span>
                         </div>
-                        <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-ink-70">
+                        <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-muted">
                           {comment.body}
                         </p>
                       </div>
@@ -525,7 +527,7 @@ export default function DesignDetailPage() {
                     </FieldShell>
                     <button
                       type="button"
-                      className="btn-ghost"
+                      className="btn-ghost w-full sm:w-auto"
                       onClick={postComment}
                       disabled={!commentBody.trim() || busy === 'comment'}
                     >
@@ -533,7 +535,7 @@ export default function DesignDetailPage() {
                     </button>
                   </>
                 ) : (
-                  <p className="text-sm text-ink-55">
+                  <p className="text-sm text-muted">
                     {isAuthenticated ? (
                       'Confirm your email address to join the discussion.'
                     ) : (
@@ -552,11 +554,11 @@ export default function DesignDetailPage() {
 
           <section className="card p-5 sm:p-6">
             <h2 className="font-display text-lg font-bold text-aubergine">“I have one”</h2>
-            <p className="mt-2 text-sm text-ink-70">
+            <p className="mt-2 text-sm text-muted">
               Acknowledge that you fabricated or run this design, and optionally rate it.
             </p>
             {design.ratingCount > 0 ? (
-              <p className="mt-3 text-sm text-ink-70">
+              <p className="mt-3 text-sm text-muted">
                 <span className="text-coral">★</span> {design.rating.toFixed(1)} from{' '}
                 <span className="data-unit">{design.ratingCount}</span>{' '}
                 {design.ratingCount === 1 ? 'person' : 'people'} · {design.owners} have one
@@ -564,9 +566,9 @@ export default function DesignDetailPage() {
             ) : null}
 
             {isMock ? (
-              <p className="mt-4 text-sm text-ink-55">Not available on demo designs.</p>
+              <p className="mt-4 text-sm text-muted">Not available on demo designs.</p>
             ) : !isAuthenticated ? (
-              <p className="mt-4 text-sm text-ink-55">
+              <p className="mt-4 text-sm text-muted">
                 <Link to="/login" className="font-semibold text-deep-coral hover:underline">
                   Sign in
                 </Link>{' '}
@@ -584,8 +586,8 @@ export default function DesignDetailPage() {
                   <span className="text-sm font-semibold text-aubergine">I have one</span>
                 </label>
                 {hasOne ? (
-                  <div className="mt-3 flex flex-wrap items-end gap-3">
-                    <FieldShell label="Rating" className="w-36">
+                  <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+                    <FieldShell label="Rating" className="w-full sm:w-36">
                       <TextSelect
                         value={String(rating)}
                         onChange={(e) => setRating(Number(e.target.value))}
@@ -599,7 +601,7 @@ export default function DesignDetailPage() {
                     </FieldShell>
                     <button
                       type="button"
-                      className="btn-primary"
+                      className="btn-primary w-full sm:w-auto"
                       onClick={submitOwnership}
                       disabled={busy === 'ownership'}
                     >
@@ -612,47 +614,52 @@ export default function DesignDetailPage() {
           </section>
         </Reveal>
 
-        <Reveal delay={0.1} className="space-y-6 lg:sticky lg:top-28 lg:self-start">
+        <Reveal delay={0.1} className="space-y-5 lg:sticky lg:top-28 lg:self-start">
           <section className="card p-5 sm:p-6">
-            <h2 className="font-display text-sm font-bold uppercase tracking-wider text-ink-55">
-              Metadata
-            </h2>
-            <dl className="mt-4 space-y-3">
-              <MetaRow label="ID" value={design.slug} />
-              <MetaRow label="Name" value={design.title} />
-              <MetaRow label="Updated" value={formatListDate(design.updatedAt)} />
-              <MetaRow label="Created" value={formatListDate(design.createdAt)} />
-              <MetaRow label="Component type" value={design.componentType?.name} />
-              <MetaRow label="Resource type" value={design.resourceType?.name} />
-              <MetaRow label="Publish as" value={publishAsLabel(design.publishAs)} />
-              <MetaRow label="Institute" value={design.instituteName} />
-              <MetaRow label="Tested material" value={current?.testedMaterial?.name ?? design.material} />
-              <MetaRow
-                label="Tested fabrication"
-                value={current?.testedFabricationMethod?.name ?? design.fabricationMethod}
-              />
-              <MetaRow label="Version" value={current?.version} />
-              <MetaRow label="Downloads" value={String(design.downloads)} />
-              <MetaRow label="Stars" value={String(stars)} />
-            </dl>
+            <div>
+              <h2 className="font-display text-[0.7rem] font-bold uppercase tracking-[0.14em] text-muted">
+                Metadata
+              </h2>
+              <dl className="mt-4">
+                <MetaRow label="ID" value={design.slug} />
+                <MetaRow label="Name" value={design.title} />
+                <MetaRow label="Updated" value={formatListDate(design.updatedAt)} />
+                <MetaRow label="Created" value={formatListDate(design.createdAt)} />
+                <MetaRow label="Component type" value={design.componentType?.name} />
+                <MetaRow label="Resource type" value={design.resourceType?.name} />
+                <MetaRow label="Publish as" value={publishAsLabel(design.publishAs)} />
+                <MetaRow label="Institute" value={design.instituteName} />
+                <MetaRow
+                  label="Tested material"
+                  value={current?.testedMaterial?.name ?? design.material}
+                />
+                <MetaRow
+                  label="Tested fabrication"
+                  value={current?.testedFabricationMethod?.name ?? design.fabricationMethod}
+                />
+                <MetaRow label="Version" value={current?.version} />
+                <MetaRow label="Downloads" value={String(design.downloads)} />
+                <MetaRow label="Stars" value={String(stars)} />
+              </dl>
+            </div>
           </section>
 
           <section className="card p-5 sm:p-6">
-            <h2 className="font-display text-sm font-bold uppercase tracking-wider text-ink-55">
+            <h2 className="font-display text-[0.7rem] font-bold uppercase tracking-[0.14em] text-muted">
               Licence &amp; cite
             </h2>
-            <p className="mt-3 font-display text-xl font-bold text-deep-coral">
+            <p className="mt-3 font-display text-xl font-bold tracking-tight text-deep-coral">
               {licenceCode ?? 'Not declared'}
             </p>
             {current?.license?.summary ? (
-              <p className="mt-2 text-sm leading-relaxed text-ink-70">{current.license.summary}</p>
+              <p className="mt-2 text-sm leading-relaxed text-muted">{current.license.summary}</p>
             ) : null}
             {current?.howToCite ? (
-              <p className="mt-3 rounded-field border border-line bg-periwinkle-tint/30 p-3 text-sm leading-relaxed text-ink-70">
+              <p className="mt-3 rounded-field border border-line bg-periwinkle-tint/30 p-3 text-sm leading-relaxed text-muted">
                 {current.howToCite}
               </p>
             ) : (
-              <p className="mt-2 text-sm leading-relaxed text-ink-70">
+              <p className="mt-2 text-sm leading-relaxed text-muted">
                 Always cite the author and version when publishing results.
               </p>
             )}
@@ -666,11 +673,11 @@ export default function DesignDetailPage() {
 
           {current && (current.credits.length > 0 || current.creditsNote) ? (
             <section className="card p-5 sm:p-6">
-              <h2 className="font-display text-sm font-bold uppercase tracking-wider text-ink-55">
+              <h2 className="font-display text-[0.7rem] font-bold uppercase tracking-[0.14em] text-muted">
                 Credits
               </h2>
               {current.creditsNote ? (
-                <p className="mt-3 text-sm leading-relaxed text-ink-70">{current.creditsNote}</p>
+                <p className="mt-3 text-sm leading-relaxed text-muted">{current.creditsNote}</p>
               ) : null}
               <ul className="mt-4 space-y-4">
                 {current.credits.map((credit) => (
@@ -681,9 +688,9 @@ export default function DesignDetailPage() {
                     <div>
                       <p className="text-sm font-semibold text-aubergine">{credit.name}</p>
                       {credit.affiliation ? (
-                        <p className="text-xs text-ink-70">{credit.affiliation}</p>
+                        <p className="text-xs text-muted">{credit.affiliation}</p>
                       ) : null}
-                      {credit.role ? <p className="text-xs text-ink-55">{credit.role}</p> : null}
+                      {credit.role ? <p className="text-xs text-muted">{credit.role}</p> : null}
                     </div>
                   </li>
                 ))}
@@ -693,12 +700,16 @@ export default function DesignDetailPage() {
 
           {design.tags.length > 0 ? (
             <section className="card p-5 sm:p-6">
-              <h2 className="font-display text-sm font-bold uppercase tracking-wider text-ink-55">
+              <h2 className="font-display text-[0.7rem] font-bold uppercase tracking-[0.14em] text-muted">
                 Keywords
               </h2>
               <div className="mt-3 flex flex-wrap gap-2">
                 {design.tags.map((tag) => (
-                  <Link key={tag} to={`/designs?tag=${encodeURIComponent(tag)}`} className="pill text-ink-70">
+                  <Link
+                    key={tag}
+                    to={`/designs?tag=${encodeURIComponent(tag)}`}
+                    className="pill text-muted"
+                  >
                     {tag}
                   </Link>
                 ))}

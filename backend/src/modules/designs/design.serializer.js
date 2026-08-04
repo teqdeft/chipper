@@ -7,13 +7,17 @@
  * can switch from mocks to the API without touching their markup.
  */
 const { publicUrlFor } = require('../../middlewares/upload');
+const { MAX_COVER_IMAGES } = require('../../config/constants');
 const { parseJson, formatBytes } = require('../../utils/helpers');
 const { toAuthorRef } = require('../users/user.serializer');
 
 /** Card/row shape for SCR-017 (browse) and SCR-022 (my designs). */
-function toDesignList(row, { organs = [], tags = [], starred = false } = {}) {
+function toDesignList(row, { organs = [], tags = [], starred = false, coverPath = null, coverImageUrl } = {}) {
   if (!row) return null;
   return {
+    // The card thumbnail. Callers that already hold the version's files pass the
+    // url outright; browse passes the stored path and lets this resolve it.
+    coverImageUrl: coverImageUrl !== undefined ? coverImageUrl : publicUrlFor(coverPath),
     id: row.uuid,
     numericId: row.id,
     slug: row.slug,
@@ -38,6 +42,9 @@ function toDesignList(row, { organs = [], tags = [], starred = false } = {}) {
     author: row.author_name,
     authorHandle: row.author_handle,
     authorAffiliation: row.author_affiliation || null,
+    // Already joined in for every list query — the card avatar reads it here
+    // rather than fetching the uploader separately per row.
+    authorAvatarUrl: publicUrlFor(row.author_avatar_path),
     publishAs: row.publish_as,
     instituteName: row.institute_name || null,
     downloads: Number(row.download_count) || 0,
@@ -174,8 +181,19 @@ function toDesignDetail(design, extras = {}) {
     owned = null, viewerRating = null, canEdit = false, canModerate = false,
   } = extras;
 
+  // The version's files are already serialised here, so the thumbnail is read
+  // off them rather than queried again.
+  const images = (version?.files || []).filter((f) => f.kind === 'image' && f.url);
+  const covers = images.filter((f) => f.isCover);
+
   return {
-    ...toDesignList(design, { organs, tags, starred }),
+    ...toDesignList(design, {
+      organs,
+      tags,
+      starred,
+      coverImageUrl: (covers[0] || images[0])?.url ?? null,
+    }),
+    coverImages: (covers.length ? covers : images).slice(0, MAX_COVER_IMAGES).map((f) => f.url),
     author: toAuthorRef(design) || {
       id: design.author_id,
       name: design.author_name,

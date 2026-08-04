@@ -75,11 +75,11 @@ export default function AdminDashboardPage() {
         {stats.map((stat) => (
           <RevealItem key={stat.label}>
             <div className="card p-5">
-              <p className="text-xs font-semibold uppercase tracking-eyebrow text-ink-55">{stat.label}</p>
+              <p className="text-xs font-semibold uppercase tracking-eyebrow text-muted">{stat.label}</p>
               <p className="mt-2 font-display text-2xl font-extrabold tabular-nums text-aubergine">
                 {stat.value}
               </p>
-              <p className="mt-1 text-xs text-ink-55">{stat.sub}</p>
+              <p className="mt-1 text-xs text-muted">{stat.sub}</p>
               {stat.highlight ? (
                 <StatusBadge tone="yellow" className="mt-3">
                   Needs attention
@@ -94,9 +94,9 @@ export default function AdminDashboardPage() {
         <Reveal delay={0.08} as="section">
           <h2 className="font-display text-lg font-bold text-aubergine">Recently created designs</h2>
           {data.recentDesigns.length === 0 ? (
-            <p className="mt-4 text-sm text-ink-70">Nothing yet.</p>
+            <p className="mt-4 text-sm text-muted">Nothing yet.</p>
           ) : (
-            <ul className="mt-4 divide-y divide-line rounded-[16px] border border-line bg-canvas shadow-soft">
+            <ul className="mt-4 divide-y divide-line rounded-card border border-line bg-surface shadow-soft">
               {data.recentDesigns.map((design) => (
                 <li key={design.id} className="flex items-center justify-between gap-4 px-4 py-3">
                   <div className="min-w-0">
@@ -106,7 +106,7 @@ export default function AdminDashboardPage() {
                     >
                       {design.title}
                     </Link>
-                    <p className="text-xs text-ink-55">
+                    <p className="text-xs text-muted">
                       {design.author} · {new Date(design.createdAt).toLocaleDateString()}
                     </p>
                   </div>
@@ -123,7 +123,7 @@ export default function AdminDashboardPage() {
 
         <Reveal delay={0.1} as="section">
           <h2 className="font-display text-lg font-bold text-aubergine">Community</h2>
-          <dl className="mt-4 space-y-3 rounded-[16px] border border-line bg-canvas p-5 shadow-soft">
+          <dl className="mt-4 space-y-3 rounded-card border border-line bg-surface p-5 shadow-soft">
             {[
               ['Members', data.detail.users.total.toLocaleString()],
               ['New members (30 days)', data.detail.users.newLast30Days.toLocaleString()],
@@ -136,7 +136,7 @@ export default function AdminDashboardPage() {
                 key={label}
                 className="flex items-center justify-between gap-4 border-b border-line pb-3 last:border-0 last:pb-0"
               >
-                <dt className="text-sm text-ink-55">{label}</dt>
+                <dt className="text-sm text-muted">{label}</dt>
                 <dd className="font-display font-bold tabular-nums text-aubergine">{value}</dd>
               </div>
             ))}
@@ -153,7 +153,7 @@ export default function AdminDashboardPage() {
                 <span className="font-display text-base font-bold text-aubergine group-hover:text-deep-coral">
                   {item.label}
                 </span>
-                <p className="mt-1 text-sm text-ink-55">{item.desc}</p>
+                <p className="mt-1 text-sm text-muted">{item.desc}</p>
               </Link>
             </RevealItem>
           ))}

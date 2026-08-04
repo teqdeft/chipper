@@ -128,7 +128,7 @@ export default function AdminCommentsPage() {
                         <StatusBadge tone={statusTone[comment.status]}>{comment.status}</StatusBadge>
                         <span className="text-sm font-semibold text-aubergine">
                           {comment.author.name}
-                          <span className="font-normal text-ink-55"> on </span>
+                          <span className="font-normal text-muted"> on </span>
                           <Link
                             to={`/designs/${comment.design.slug}`}
                             className="hover:text-deep-coral hover:underline"
@@ -137,8 +137,8 @@ export default function AdminCommentsPage() {
                           </Link>
                         </span>
                       </div>
-                      <p className="mt-2 text-sm leading-relaxed text-ink-70">{comment.body}</p>
-                      <p className="mt-2 text-xs text-ink-40">
+                      <p className="mt-2 text-sm leading-relaxed text-muted">{comment.body}</p>
+                      <p className="mt-2 text-xs text-muted">
                         @{comment.author.handle} · {new Date(comment.createdAt).toLocaleDateString()}
                       </p>
                     </div>
@@ -148,7 +148,7 @@ export default function AdminCommentsPage() {
                         <button
                           type="button"
                           disabled={busy}
-                          className="rounded-field border border-line px-3 py-1.5 text-xs font-semibold text-ink-70 hover:bg-periwinkle-tint/50 disabled:opacity-40"
+                          className="rounded-field border border-line px-3 py-1.5 text-xs font-semibold text-muted hover:bg-periwinkle-tint/50 disabled:opacity-40"
                           onClick={() => void moderate(comment, 'hide')}
                         >
                           Hide
@@ -157,7 +157,7 @@ export default function AdminCommentsPage() {
                         <button
                           type="button"
                           disabled={busy}
-                          className="rounded-field border border-green/40 bg-green/10 px-3 py-1.5 text-xs font-semibold text-[#0f7a52] hover:bg-green/20 disabled:opacity-40"
+                          className="rounded-field border border-green/40 bg-green/10 px-3 py-1.5 text-xs font-semibold text-published-green hover:bg-green/20 disabled:opacity-40"
                           onClick={() => void moderate(comment, 'restore')}
                         >
                           Restore

@@ -23,7 +23,7 @@ export function Pagination({
       className={cn('flex flex-wrap items-center justify-between gap-3', className)}
       aria-label="Pagination"
     >
-      <p className="text-xs text-ink-55">
+      <p className="text-xs text-muted">
         Page {page} of {totalPages} · {totalItems.toLocaleString()} total
       </p>
       <div className="flex gap-2">
@@ -31,7 +31,7 @@ export function Pagination({
           type="button"
           disabled={!pagination.hasPreviousPage}
           onClick={() => onPage(page - 1)}
-          className="rounded-field border border-line px-3 py-1.5 text-xs font-semibold text-ink-70 transition-colors hover:bg-periwinkle-tint/50 disabled:opacity-40"
+          className="rounded-field border border-line px-3 py-1.5 text-xs font-semibold text-muted transition-colors hover:bg-periwinkle-tint/50 disabled:opacity-40"
         >
           ← Previous
         </button>
@@ -39,7 +39,7 @@ export function Pagination({
           type="button"
           disabled={!pagination.hasNextPage}
           onClick={() => onPage(page + 1)}
-          className="rounded-field border border-line px-3 py-1.5 text-xs font-semibold text-ink-70 transition-colors hover:bg-periwinkle-tint/50 disabled:opacity-40"
+          className="rounded-field border border-line px-3 py-1.5 text-xs font-semibold text-muted transition-colors hover:bg-periwinkle-tint/50 disabled:opacity-40"
         >
           Next →
         </button>

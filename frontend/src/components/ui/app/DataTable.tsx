@@ -22,12 +22,12 @@ export function DataTable<T extends { id: string }>({
   if (!rows.length) return <>{empty ?? <EmptyState title="Nothing here yet" />}</>;
 
   return (
-    <Reveal y={16} className="overflow-x-auto rounded-[16px] border border-line bg-canvas shadow-soft">
+    <Reveal y={16} className="overflow-x-auto rounded-card border border-line bg-surface shadow-soft">
       <table className="w-full min-w-[640px] text-left text-sm">
         <thead className="border-b border-line bg-periwinkle-tint/40">
           <tr>
             {columns.map((c) => (
-              <th key={c.key} className={cn('px-4 py-3 font-semibold text-ink-70', c.className)}>
+              <th key={c.key} className={cn('px-4 py-3 font-semibold text-muted', c.className)}>
                 {c.header}
               </th>
             ))}

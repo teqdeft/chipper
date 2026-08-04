@@ -22,10 +22,12 @@ const { getPagination, buildPaginationMeta, applySorting } = require('../../util
 const { uuid, uniqueSlug, nextVersion, toArray, pick } = require('../../utils/helpers');
 const {
   DESIGN_STATUS, SORTABLE_DESIGN_FIELDS, COMMENT_STATUS, NOTIFICATION_TYPE, ENTITY_TYPE,
-  PUBLISH_AS, COMPONENT_TYPE,
+  PUBLISH_AS, COMPONENT_TYPE, FILE_KIND, MAX_COVER_IMAGES,
 } = require('../../config/constants');
 const { PERMISSIONS, roleHasPermission } = require('../../config/permissions');
-const { describeFile, removeStoredFile, cleanupFiles } = require('../../middlewares/upload');
+const {
+  describeFile, removeStoredFile, copyStoredFile, cleanupFiles, kindOf,
+} = require('../../middlewares/upload');
 const designRepository = require('./design.repository');
 const taxonomyService = require('../taxonomy/taxonomy.service');
 const notificationService = require('../notifications/notification.service');
@@ -171,6 +173,48 @@ async function writeVersionCollections(versionId, payload, ids, trx) {
   }
 }
 
+/**
+ * Which files in an upload are the gallery covers.
+ *
+ * `coverIndexes` is the current parameter (up to three); `coverIndex` is the
+ * older single-cover one and still works, so an existing client keeps working.
+ * A cover the gallery cannot render is a bug the uploader cannot see, so
+ * anything that is not an image is rejected rather than silently accepted.
+ */
+function resolveCoverIndexes(files, { coverIndex, coverIndexes }) {
+  const requested = toArray(coverIndexes).length
+    ? toArray(coverIndexes)
+    : coverIndex !== undefined && coverIndex !== null
+      ? [coverIndex]
+      : [];
+
+  const indexes = [
+    ...new Set(
+      requested
+        .map(Number)
+        .filter((n) => Number.isInteger(n) && n >= 0 && n < files.length),
+    ),
+  ];
+
+  if (indexes.length > MAX_COVER_IMAGES) {
+    throw ApiError.validation(`Choose at most ${MAX_COVER_IMAGES} cover images`, [
+      { field: 'coverIndexes', message: `A design shows at most ${MAX_COVER_IMAGES} cover images` },
+    ]);
+  }
+
+  const notImages = indexes.filter((i) => kindOf(files[i].originalname) !== FILE_KIND.IMAGE);
+  if (notImages.length) {
+    throw ApiError.validation('Cover images must be images', [
+      {
+        field: 'coverIndexes',
+        message: `"${files[notImages[0]].originalname}" is not an image — covers must be JPG, PNG, WebP or GIF`,
+      },
+    ]);
+  }
+
+  return indexes;
+}
+
 const designService = {
   /** SCR-017 — browse / search with filters, sorting and facet counts. */
   async browse(query, viewer = null) {
@@ -233,14 +277,14 @@ const designService = {
     };
   },
 
-  /** Attaches organs, tags and the viewer's star state to a list of rows. */
+  /** Attaches organs, tags, the card thumbnail and the viewer's star state. */
   async decorateList(rows, viewer) {
     if (!rows.length) return [];
 
     const designIds = rows.map((r) => r.id);
     const versionIds = rows.map((r) => r.current_version_id).filter(Boolean);
 
-    const [organRows, tagRows, starred] = await Promise.all([
+    const [organRows, tagRows, imageRows, starred] = await Promise.all([
       versionIds.length
         ? db('design_version_organs')
             .join('organs', 'design_version_organs.organ_id', 'organs.id')
@@ -251,17 +295,36 @@ const designService = {
         .join('tags', 'design_tags.tag_id', 'tags.id')
         .whereIn('design_tags.design_id', designIds)
         .select('design_tags.design_id', 'tags.slug', 'tags.name'),
+      // Covers first, so a design that predates cover images still gets a
+      // thumbnail from whatever it did upload rather than a blank card.
+      versionIds.length
+        ? db('design_files')
+            .whereIn('design_version_id', versionIds)
+            .where('kind', FILE_KIND.IMAGE)
+            .orderBy('is_cover', 'desc')
+            .orderBy('sort_order')
+            .orderBy('id')
+            .select('design_version_id', 'path')
+        : [],
       designRepository.starredIds(viewer?.id, designIds),
     ]);
 
     const organsByVersion = groupBy(organRows, 'design_version_id');
     const tagsByDesign = groupBy(tagRows, 'design_id');
 
+    const coverByVersion = {};
+    for (const image of imageRows) {
+      if (!(image.design_version_id in coverByVersion)) {
+        coverByVersion[image.design_version_id] = image.path;
+      }
+    }
+
     return rows.map((row) =>
       serializer.toDesignList(row, {
         organs: organsByVersion[row.current_version_id] || [],
         tags: tagsByDesign[row.id] || [],
         starred: starred.has(row.id),
+        coverPath: coverByVersion[row.current_version_id] || null,
       }),
     );
   },
@@ -430,69 +493,115 @@ const designService = {
         : undefined;
 
     const current = await designRepository.findVersion(design.id, design.current_version_id);
-    const editInPlace = !current || current.status !== DESIGN_STATUS.PUBLISHED;
 
-    const versionId = await db.transaction(async (trx) => {
-      const columns = pick(buildVersionColumns(payload, { ...ids, componentTypeId }, typeSpecific), VERSION_METADATA_FIELDS);
+    /**
+     * A published design that already carries an unsubmitted draft is edited
+     * *there*. Branching on every save would stack v1.1, v1.2, v1.3 for three
+     * rounds of proof-reading and duplicate the file set each time. A draft that
+     * has been submitted is left alone — a moderator is looking at it — so that
+     * case still branches.
+     */
+    const queued =
+      current && current.status === DESIGN_STATUS.PUBLISHED
+        ? (await designRepository.unpublishedVersionsByDesign([design.id]))[design.id]
+        : null;
+    const reusable =
+      queued && queued.status === DESIGN_STATUS.DRAFT
+        ? await designRepository.findVersion(design.id, queued.id)
+        : null;
 
-      let targetVersionId;
-      if (editInPlace && current) {
-        await designRepository.updateVersion(current.id, columns, trx);
-        targetVersionId = current.id;
-      } else {
-        // Branch a new draft version from the published one.
-        const latest = await designRepository.latestVersion(design.id, trx);
-        targetVersionId = await designRepository.createVersion(
+    const target = reusable || current;
+    const editInPlace = !target || target.status !== DESIGN_STATUS.PUBLISHED;
+
+    // A branched draft inherits the published version's files. Without them it
+    // would be a version nobody can publish — the gate demands a file and a
+    // cover image, and this endpoint has no way to upload either.
+    const carried =
+      !editInPlace && target
+        ? await this.prepareCarriedFiles(design.id, target.id, user.id)
+        : { rows: [], paths: [] };
+
+    let versionId;
+    try {
+      versionId = await db.transaction(async (trx) => {
+        const columns = pick(buildVersionColumns(payload, { ...ids, componentTypeId }, typeSpecific), VERSION_METADATA_FIELDS);
+
+        let targetVersionId;
+        if (editInPlace && target) {
+          await designRepository.updateVersion(target.id, columns, trx);
+          targetVersionId = target.id;
+        } else {
+          // Branch a new draft version from the published one.
+          const latest = await designRepository.latestVersion(design.id, trx);
+          targetVersionId = await designRepository.createVersion(
+            {
+              ...pick(target || {}, VERSION_METADATA_FIELDS),
+              ...columns,
+              design_id: design.id,
+              version: payload.version || nextVersion(latest?.version, payload.versionBump || 'minor'),
+              version_number: (latest?.version_number || 0) + 1,
+              version_note: payload.versionNote || 'Metadata update',
+              status: DESIGN_STATUS.DRAFT,
+              created_by: user.id,
+              published_at: null,
+              download_count: 0,
+            },
+            trx,
+          );
+
+          // Carry the previous version's collections forward as the starting point.
+          if (target) await this.cloneVersionCollections(target.id, targetVersionId, trx);
+          if (carried.rows.length) {
+            await designRepository.addFiles(
+              carried.rows.map((row) => ({ ...row, design_version_id: targetVersionId })),
+              trx,
+            );
+          }
+        }
+
+        await writeVersionCollections(targetVersionId, payload, { ...ids, componentTypeId }, trx);
+
+        await designRepository.update(
+          design.id,
           {
-            ...pick(current || {}, VERSION_METADATA_FIELDS),
-            ...columns,
-            design_id: design.id,
-            version: payload.version || nextVersion(latest?.version, payload.versionBump || 'minor'),
-            version_number: (latest?.version_number || 0) + 1,
-            version_note: payload.versionNote || 'Metadata update',
-            status: DESIGN_STATUS.DRAFT,
-            created_by: user.id,
-            published_at: null,
-            download_count: 0,
+            title: payload.title,
+            summary: payload.summary,
+            component_type_id: componentTypeId,
+            resource_type_id: ids.resourceTypeId ?? design.resource_type_id,
+            publish_as: payload.publishAs,
+            institute_name: payload.instituteName,
+            is_iso22916: payload.iso22916,
+            // Only when the row being written is the design's own current
+            // version. Editing a draft queued *behind* a live version must not
+            // promote that draft — publishing is what moves the pointer.
+            ...(editInPlace && !reusable ? { current_version_id: targetVersionId } : {}),
           },
           trx,
         );
 
-        // Carry the previous version's collections forward as the starting point.
-        if (current) await this.cloneVersionCollections(current.id, targetVersionId, trx);
-      }
+        if (payload.tags) {
+          const tagIds = await taxonomyService.upsertTags(payload.tags, trx);
+          await designRepository.replaceTags(design.id, tagIds, trx);
+        }
 
-      await writeVersionCollections(targetVersionId, payload, { ...ids, componentTypeId }, trx);
-
-      await designRepository.update(
-        design.id,
-        {
-          title: payload.title,
-          summary: payload.summary,
-          component_type_id: componentTypeId,
-          resource_type_id: ids.resourceTypeId ?? design.resource_type_id,
-          publish_as: payload.publishAs,
-          institute_name: payload.instituteName,
-          is_iso22916: payload.iso22916,
-          ...(editInPlace ? { current_version_id: targetVersionId } : {}),
-        },
-        trx,
-      );
-
-      if (payload.tags) {
-        const tagIds = await taxonomyService.upsertTags(payload.tags, trx);
-        await designRepository.replaceTags(design.id, tagIds, trx);
-      }
-
-      return targetVersionId;
-    });
+        return targetVersionId;
+      });
+    } catch (err) {
+      await Promise.all(carried.paths.map((relative) => removeStoredFile(relative)));
+      throw err;
+    }
 
     await auditService.log({
       userId: user.id,
       action: 'design.update',
       entityType: ENTITY_TYPE.DESIGN,
       entityId: design.id,
-      changes: { versionId, inPlace: editInPlace },
+      changes: {
+        versionId,
+        inPlace: editInPlace,
+        reusedDraft: Boolean(reusable),
+        carriedFiles: carried.rows.length,
+      },
       context,
     });
 
@@ -529,6 +638,57 @@ const designService = {
     );
   },
 
+  /**
+   * Duplicates a version's files for the version about to be branched from it.
+   *
+   * A new version starts as a copy of the last one, and files are the reason:
+   * bumping v1.0 to v1.1 for one revised STL should not make the uploader
+   * re-upload the assembly PDF and the cover images — and without a cover the
+   * publish gate would reject the new version outright.
+   *
+   * Each carried file gets its own bytes (see `copyStoredFile`) so deleting it
+   * from one version leaves the other intact. The bytes are copied before the
+   * caller's transaction opens, because the new version's row does not exist
+   * yet; the returned `paths` let the caller clean up if that transaction then
+   * rolls back. Rows come back without `design_version_id` for the caller to
+   * stamp on.
+   */
+  async prepareCarriedFiles(designId, fromVersionId, userId) {
+    const source = await designRepository.listFiles(fromVersionId);
+    const rows = [];
+    const paths = [];
+
+    for (const [index, file] of source.entries()) {
+      // Sequential on purpose: a version can carry twenty files and copying
+      // them all at once would put twenty concurrent reads on the disk.
+      // eslint-disable-next-line no-await-in-loop
+      const copy = await copyStoredFile(file.path, config.upload.folders.designs, {
+        originalName: file.original_name,
+      });
+      if (!copy) continue; // Source bytes are gone — skip rather than fail the version.
+
+      paths.push(copy.path);
+      rows.push({
+        ...copy,
+        uuid: uuid(),
+        design_id: designId,
+        original_name: file.original_name,
+        mime_type: file.mime_type,
+        extension: file.extension,
+        size_bytes: file.size_bytes,
+        checksum: file.checksum,
+        is_primary: Boolean(file.is_primary),
+        is_cover: Boolean(file.is_cover),
+        sort_order: index,
+        uploaded_by: userId,
+        // Downloads belong to the version that earned them.
+        download_count: 0,
+      });
+    }
+
+    return { rows, paths };
+  },
+
   /** Explicitly starts a new version (SCR-023 "publish new version"). */
   async createVersion(identifier, payload, user, context = {}) {
     const design = await this.assertEditable(identifier, user);
@@ -539,30 +699,48 @@ const designService = {
     const exists = await db('design_versions').where({ design_id: design.id, version }).first();
     if (exists) throw ApiError.conflict(`Version ${version} already exists`, { code: 'VERSION_EXISTS' });
 
-    const versionId = await db.transaction(async (trx) => {
-      const id = await designRepository.createVersion(
-        {
-          ...pick(source || {}, VERSION_METADATA_FIELDS),
-          design_id: design.id,
-          version,
-          version_number: (latest?.version_number || 0) + 1,
-          version_note: payload.note || null,
-          status: DESIGN_STATUS.DRAFT,
-          created_by: user.id,
-          type_specific: source?.type_specific,
-        },
-        trx,
-      );
-      if (source && payload.copyMetadata !== false) await this.cloneVersionCollections(source.id, id, trx);
-      return id;
-    });
+    const carried =
+      source && payload.copyFiles !== false
+        ? await this.prepareCarriedFiles(design.id, source.id, user.id)
+        : { rows: [], paths: [] };
+
+    let versionId;
+    try {
+      versionId = await db.transaction(async (trx) => {
+        const id = await designRepository.createVersion(
+          {
+            ...pick(source || {}, VERSION_METADATA_FIELDS),
+            design_id: design.id,
+            version,
+            version_number: (latest?.version_number || 0) + 1,
+            version_note: payload.note || null,
+            status: DESIGN_STATUS.DRAFT,
+            created_by: user.id,
+            type_specific: source?.type_specific,
+          },
+          trx,
+        );
+        if (source && payload.copyMetadata !== false) await this.cloneVersionCollections(source.id, id, trx);
+        if (carried.rows.length) {
+          await designRepository.addFiles(
+            carried.rows.map((row) => ({ ...row, design_version_id: id })),
+            trx,
+          );
+        }
+        return id;
+      });
+    } catch (err) {
+      // The copies are orphans now — nothing points at them.
+      await Promise.all(carried.paths.map((relative) => removeStoredFile(relative)));
+      throw err;
+    }
 
     await auditService.log({
       userId: user.id,
       action: 'design.version_create',
       entityType: ENTITY_TYPE.DESIGN,
       entityId: design.id,
-      changes: { version },
+      changes: { version, carriedFiles: carried.rows.length },
       context,
     });
 
@@ -613,6 +791,13 @@ const designService = {
       'Choose a licence before publishing',
     );
     needs(files.length, 'files', 'Upload at least one file');
+    // The cover is what the library is browsed by — a design without one is a
+    // blank card, so it is a publish requirement rather than a nicety.
+    needs(
+      files.some((f) => f.is_cover && f.kind === FILE_KIND.IMAGE),
+      'coverImages',
+      `Add at least one cover image (up to ${MAX_COVER_IMAGES}) — it is what people see on browse cards`,
+    );
 
     if (design.publish_as !== PUBLISH_AS.PERSON) {
       needs(design.institute_name, 'instituteName', 'Name the institute you are publishing under');
@@ -635,27 +820,44 @@ const designService = {
     const reviewRequired = config.features.designReviewRequired && !canModerateDesigns(user);
     const status = reviewRequired ? DESIGN_STATUS.PENDING : DESIGN_STATUS.PUBLISHED;
 
+    const wasPublished = design.status === DESIGN_STATUS.PUBLISHED;
+
+    /**
+     * Submitting a *branch* of a live design must not take the library entry
+     * down. The design row keeps its published status and keeps pointing at the
+     * approved version; only the branch goes to `pending`, and the moderator's
+     * approval is what moves the pointer (see admin.service reviewDesign).
+     */
+    const holdLiveVersion =
+      wasPublished &&
+      status === DESIGN_STATUS.PENDING &&
+      Number(design.current_version_id) !== Number(version.id);
+
     await db.transaction(async (trx) => {
       await designRepository.updateVersion(
         version.id,
         { status, published_at: status === DESIGN_STATUS.PUBLISHED ? db.fn.now() : null },
         trx,
       );
-      await designRepository.update(
-        design.id,
-        {
-          status,
-          current_version_id: version.id,
-          published_at: status === DESIGN_STATUS.PUBLISHED ? db.fn.now() : design.published_at,
-        },
-        trx,
-      );
-      if (status === DESIGN_STATUS.PUBLISHED) {
+      if (!holdLiveVersion) {
+        await designRepository.update(
+          design.id,
+          {
+            status,
+            current_version_id: version.id,
+            published_at: status === DESIGN_STATUS.PUBLISHED ? db.fn.now() : design.published_at,
+          },
+          trx,
+        );
+      }
+      // Counts designs the member has put in the library, not versions of them —
+      // otherwise every bump would inflate the profile's upload count.
+      if (status === DESIGN_STATUS.PUBLISHED && !wasPublished) {
         await trx('users').where({ id: design.owner_id }).increment('upload_count', 1);
       }
     });
 
-    if (status === DESIGN_STATUS.PUBLISHED) {
+    if (status === DESIGN_STATUS.PUBLISHED && !wasPublished) {
       await require('../users/user.repository').awardBadge(design.owner_id, 'first-upload').catch(() => {});
     }
 
@@ -669,11 +871,15 @@ const designService = {
     });
 
     return {
+      // The status of the version that was submitted — the design row itself may
+      // still read `published` when a branch went to review behind it.
       status,
       requiresReview: reviewRequired,
       message: reviewRequired
-        ? 'Your design has been sent to review. You will be notified when it is live.'
-        : 'Design published',
+        ? holdLiveVersion
+          ? `${version.version} has been sent to review. Downloads keep serving your live version until it is approved.`
+          : 'Your design has been sent to review. You will be notified when it is live.'
+        : `${version.version} published`,
       design: await this.getDetail(design.id, { viewer: user, countView: false }),
     };
   },
@@ -707,24 +913,26 @@ const designService = {
   // ── Files ────────────────────────────────────────────────────────────────
 
   /** Attaches uploaded files to a version. */
-  async addFiles(identifier, { versionId, files, primaryIndex, coverIndex }, user, context = {}) {
+  async addFiles(identifier, { versionId, files, primaryIndex, coverIndex, coverIndexes }, user, context = {}) {
     if (!files?.length) throw ApiError.badRequest('No files were uploaded', { code: 'FILES_REQUIRED' });
 
     let design;
+    let version;
+    let covers;
     try {
       design = await this.assertEditable(identifier, user);
+
+      version = versionId
+        ? await designRepository.findVersion(design.id, versionId)
+        : await designRepository.findVersion(design.id, design.current_version_id);
+
+      if (!version) throw ApiError.badRequest('This design has no version to attach files to');
+
+      covers = new Set(resolveCoverIndexes(files, { coverIndex, coverIndexes }));
     } catch (err) {
+      // Nothing was written yet, so the bytes already on disk are orphans.
       await cleanupFiles(files);
       throw err;
-    }
-
-    const version = versionId
-      ? await designRepository.findVersion(design.id, versionId)
-      : await designRepository.findVersion(design.id, design.current_version_id);
-
-    if (!version) {
-      await cleanupFiles(files);
-      throw ApiError.badRequest('This design has no version to attach files to');
     }
 
     const existing = await designRepository.listFiles(version.id);
@@ -738,16 +946,18 @@ const designService = {
         uploaded_by: user.id,
         sort_order: existing.length + index,
         is_primary: index === Number(primaryIndex) || (!existing.length && index === 0 && described.kind === 'model'),
-        is_cover: index === Number(coverIndex),
+        is_cover: covers.has(index),
       };
     });
 
     await db.transaction(async (trx) => {
-      // Only one primary/cover per version.
+      // One primary per version; and a request that nominates covers replaces
+      // the version's whole cover set, so the cap cannot be walked past by
+      // uploading a few at a time.
       if (rows.some((r) => r.is_primary)) {
         await trx('design_files').where({ design_version_id: version.id }).update({ is_primary: false });
       }
-      if (rows.some((r) => r.is_cover)) {
+      if (covers.size) {
         await trx('design_files').where({ design_version_id: version.id }).update({ is_cover: false });
       }
       await designRepository.addFiles(rows, trx);
@@ -771,7 +981,8 @@ const designService = {
     const file = await designRepository.findFile(fileId);
     if (!file || Number(file.design_id) !== Number(design.id)) throw ApiError.notFound('File not found');
 
-    await designRepository.deleteFile(fileId);
+    // Delete by the resolved numeric id — `fileId` may have arrived as a uuid.
+    await designRepository.deleteFile(file.id);
     await removeStoredFile(file.path);
 
     await auditService.log({
@@ -836,6 +1047,28 @@ const designService = {
       await trx('design_files').where({ id: file.id }).increment('download_count', 1);
       if (user) await trx('users').where({ id: user.id }).increment('download_count', 1);
     });
+
+    // First download by this member for this design → alert the owner once.
+    if (user && Number(design.owner_id) !== Number(user.id)) {
+      db('design_downloads')
+        .where({ design_id: design.id, user_id: user.id })
+        .count({ total: 'id' })
+        .then(([{ total }]) => {
+          if (Number(total) !== 1) return;
+          return notificationService.notify({
+            userId: design.owner_id,
+            actorId: user.id,
+            type: NOTIFICATION_TYPE.DESIGN_DOWNLOADED,
+            title: `${user.name} downloaded your design`,
+            body: design.title,
+            link: `/designs/${design.slug}`,
+            entityType: ENTITY_TYPE.DESIGN,
+            entityId: design.id,
+            email: false,
+          });
+        })
+        .catch(() => {});
+    }
 
     return {
       absolutePath,
@@ -1033,8 +1266,23 @@ const designService = {
     applySorting(base, query, SORTABLE_DESIGN_FIELDS, { column: 'updated_at', order: 'desc' });
     const rows = await base.limit(limit).offset((page - 1) * limit);
 
+    const [items, queued] = await Promise.all([
+      this.decorateList(rows, user),
+      designRepository.unpublishedVersionsByDesign(rows.map((r) => r.id)),
+    ]);
+
     return {
-      items: await this.decorateList(rows, user),
+      // Only the owner's own list carries this — it drives the "submit the
+      // draft you branched" action, which nobody else has any use for.
+      items: items.map((item) => {
+        const draft = queued[item.numericId];
+        return {
+          ...item,
+          pendingVersion: draft
+            ? { id: draft.id, version: draft.version, status: draft.status }
+            : null,
+        };
+      }),
       pagination: buildPaginationMeta({ total, page, limit }),
     };
   },

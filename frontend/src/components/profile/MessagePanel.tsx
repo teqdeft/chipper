@@ -56,17 +56,17 @@ export function MessagePanel({ open, onClose, handle, name }: MessagePanelProps)
   if (!canMessage) {
     return (
       <Reveal as="section" aria-label={`Sign in to message ${firstName}`}>
-        <div className="overflow-hidden rounded-[18px] border border-coral/25 bg-gradient-to-br from-coral/10 via-canvas to-periwinkle-tint/40 p-5 shadow-soft sm:rounded-card sm:p-6">
+        <div className="overflow-hidden rounded-card border border-coral/25 bg-gradient-to-br from-coral/10 via-canvas to-periwinkle-tint/40 p-5 shadow-soft sm:p-6">
           <p className="eyebrow text-deep-coral">Direct message</p>
           <h2 className="mt-2 font-display text-xl font-bold text-aubergine">
             Sign in to message {firstName}
           </h2>
-          <p className="mt-2 max-w-prose text-sm leading-relaxed text-ink-70">
+          <p className="mt-2 max-w-prose text-sm leading-relaxed text-muted">
             Messages go to a member&apos;s inbox, so you need a free Chipper account to send one.
             Creating one also lets you download designs, ask questions in the forum and publish your
             own work.
           </p>
-          <div className="mt-5 flex flex-wrap items-center gap-3">
+          <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
             <Link to="/register" state={{ from: location }} className="btn-primary text-sm">
               Create an account
             </Link>
@@ -76,7 +76,7 @@ export function MessagePanel({ open, onClose, handle, name }: MessagePanelProps)
             <button
               type="button"
               onClick={onClose}
-              className="text-sm font-medium text-ink-55 transition-colors hover:text-aubergine"
+              className="text-sm font-medium text-muted transition-colors hover:text-aubergine"
             >
               Not now
             </button>
@@ -90,14 +90,14 @@ export function MessagePanel({ open, onClose, handle, name }: MessagePanelProps)
   if (sentTo) {
     return (
       <Reveal as="section">
-        <div className="overflow-hidden rounded-[18px] border border-green/30 bg-gradient-to-br from-green/10 via-canvas to-periwinkle-tint/30 p-5 shadow-soft sm:rounded-card sm:p-6">
-          <p className="eyebrow text-[#0f7a52]">Delivered</p>
+        <div className="overflow-hidden rounded-card border border-green/30 bg-gradient-to-br from-green/10 via-canvas to-periwinkle-tint/30 p-5 shadow-soft sm:p-6">
+          <p className="eyebrow text-published-green">Delivered</p>
           <h2 className="mt-2 font-display text-xl font-bold text-aubergine">Message sent</h2>
-          <p className="mt-2 max-w-prose text-sm leading-relaxed text-ink-70">
+          <p className="mt-2 max-w-prose text-sm leading-relaxed text-muted">
             {firstName} has been notified and will find it in their inbox. You can keep the thread
             going from Messages.
           </p>
-          <div className="mt-5 flex flex-wrap items-center gap-3">
+          <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
             <Link to={`/messages/${sentTo}`} className="btn-primary text-sm">
               Open conversation
             </Link>
@@ -107,7 +107,7 @@ export function MessagePanel({ open, onClose, handle, name }: MessagePanelProps)
             <button
               type="button"
               onClick={onClose}
-              className="text-sm font-medium text-ink-55 transition-colors hover:text-aubergine"
+              className="text-sm font-medium text-muted transition-colors hover:text-aubergine"
             >
               Close
             </button>
@@ -152,7 +152,7 @@ export function MessagePanel({ open, onClose, handle, name }: MessagePanelProps)
   return (
     <Reveal as="section" aria-label={`Message ${firstName}`}>
       <form
-        className="overflow-hidden rounded-[18px] border border-line bg-canvas shadow-soft sm:rounded-card"
+        className="overflow-hidden rounded-card border border-line bg-surface shadow-soft"
         onSubmit={handleSubmit}
         noValidate
       >
@@ -162,12 +162,12 @@ export function MessagePanel({ open, onClose, handle, name }: MessagePanelProps)
             <h2 className="mt-1.5 font-display text-lg font-bold text-aubergine">
               Message {firstName}
             </h2>
-            <p className="mt-0.5 truncate text-sm text-ink-55">@{handle}</p>
+            <p className="mt-0.5 truncate text-sm text-muted">@{handle}</p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="shrink-0 text-sm font-medium text-ink-55 transition-colors hover:text-aubergine"
+            className="shrink-0 text-sm font-medium text-muted transition-colors hover:text-aubergine"
           >
             Cancel
           </button>
@@ -193,7 +193,7 @@ export function MessagePanel({ open, onClose, handle, name }: MessagePanelProps)
               onChange={(e) => setSubject(e.target.value)}
               maxLength={200}
             />
-            <span className="mt-1.5 block text-xs text-ink-55">Optional — helps at a glance in the inbox.</span>
+            <span className="mt-1.5 block text-xs text-muted">Optional — helps at a glance in the inbox.</span>
           </label>
 
           <label className="block">
@@ -212,7 +212,7 @@ export function MessagePanel({ open, onClose, handle, name }: MessagePanelProps)
           </label>
 
           <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-            <p className="text-xs text-ink-40">Opens or continues your 1:1 thread with {firstName}.</p>
+            <p className="text-xs text-muted">Opens or continues your 1:1 thread with {firstName}.</p>
             <SubmitButton isLoading={isSending} loadingLabel="Sending…" disabled={!body.trim()}>
               Send message
             </SubmitButton>

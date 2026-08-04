@@ -8,6 +8,7 @@ const { slugify } = require('../../utils/helpers');
 const {
   DESIGN_STATUS, USER_STATUS, ROLES, ENTITY_TYPE, NOTIFICATION_TYPE,
 } = require('../../config/constants');
+const { removeStoredFile } = require('../../middlewares/upload');
 const userRepository = require('../users/user.repository');
 const designRepository = require('../designs/design.repository');
 const forumRepository = require('../forum/forum.repository');
@@ -240,18 +241,48 @@ const adminService = {
     const status = statusByAction[action];
     if (!status) throw ApiError.badRequest(`Unsupported action "${action}"`);
 
-    await db.transaction(async (trx) => {
-      await trx('designs')
-        .where({ id: design.id })
-        .update({
-          status,
-          published_at: status === DESIGN_STATUS.PUBLISHED ? design.published_at || trx.fn.now() : design.published_at,
-          deleted_at: action === 'restore' ? null : design.deleted_at,
-        });
+    /**
+     * The version under review is not always the one the design points at: an
+     * update to a design that is already live is submitted as a branch, and the
+     * live version keeps serving downloads until this decision lands. Approving
+     * such a branch promotes it; rejecting it leaves the design published on the
+     * version people are already downloading.
+     */
+    const pendingVersion =
+      action === 'approve' || action === 'reject'
+        ? await db('design_versions')
+            .where({ design_id: design.id, status: DESIGN_STATUS.PENDING })
+            .orderBy('version_number', 'desc')
+            .first('id')
+        : null;
 
-      if (design.current_version_id) {
+    const targetVersionId = pendingVersion?.id || design.current_version_id;
+    const isBranchReview = Boolean(
+      pendingVersion &&
+        design.status === DESIGN_STATUS.PUBLISHED &&
+        Number(pendingVersion.id) !== Number(design.current_version_id),
+    );
+
+    await db.transaction(async (trx) => {
+      if (isBranchReview) {
+        // The design row is already published; only the pointer moves, and only
+        // when the branch is approved.
+        if (status === DESIGN_STATUS.PUBLISHED) {
+          await trx('designs').where({ id: design.id }).update({ current_version_id: targetVersionId });
+        }
+      } else {
+        await trx('designs')
+          .where({ id: design.id })
+          .update({
+            status,
+            published_at: status === DESIGN_STATUS.PUBLISHED ? design.published_at || trx.fn.now() : design.published_at,
+            deleted_at: action === 'restore' ? null : design.deleted_at,
+          });
+      }
+
+      if (targetVersionId) {
         await trx('design_versions')
-          .where({ id: design.current_version_id })
+          .where({ id: targetVersionId })
           .update({
             status,
             published_at: status === DESIGN_STATUS.PUBLISHED ? trx.fn.now() : null,
@@ -295,6 +326,91 @@ const adminService = {
     });
 
     return { status, action };
+  },
+
+  /**
+   * CHIP-037 — permanently delete a design, everything under it and its bytes.
+   *
+   * Archiving hides a design but keeps it whole; this is the other end of that
+   * scale and there is no undo, so it is admin-only. Versions, files, comments,
+   * stars, ownerships and download records all cascade off the design row; the
+   * counters those rows fed (the owner's upload count, tag usage) are not FKs,
+   * so they are corrected by hand before the delete. The moderation and audit
+   * trails carry no FK to designs on purpose — they outlive the design.
+   */
+  async deleteDesign(identifier, { note } = {}, admin, context = {}) {
+    // Not designRepository.findBySlugOrId: that hides soft-deleted rows, and a
+    // design the owner already deleted is exactly one an admin may want purged.
+    const design = Number.isFinite(Number(identifier))
+      ? await db('designs').where({ id: Number(identifier) }).first()
+      : await db('designs').where({ slug: identifier }).orWhere({ uuid: identifier }).first();
+
+    if (!design) throw ApiError.notFound('Design not found');
+
+    const [paths, tagIds] = await Promise.all([
+      db('design_files').where({ design_id: design.id }).pluck('path'),
+      db('design_tags').where({ design_id: design.id }).pluck('tag_id'),
+    ]);
+
+    await db.transaction(async (trx) => {
+      // designs.current_version_id points back at design_versions, so the
+      // reference is broken before the cascade runs into it.
+      await trx('designs').where({ id: design.id }).update({ current_version_id: null });
+
+      if (design.status === DESIGN_STATUS.PUBLISHED && !design.deleted_at) {
+        await trx('users').where({ id: design.owner_id }).decrement('upload_count', 1);
+      }
+      if (tagIds.length) {
+        await trx('tags').whereIn('id', tagIds).where('usage_count', '>', 0).decrement('usage_count', 1);
+      }
+
+      await trx('moderation_actions').insert({
+        moderator_id: admin.id,
+        entity_type: ENTITY_TYPE.DESIGN,
+        entity_id: design.id,
+        action: 'delete',
+        note: note || null,
+      });
+
+      await trx('designs').where({ id: design.id }).del();
+    });
+
+    // Only once the rows are gone — an unlink cannot be rolled back, so a
+    // failed transaction must not have taken the files with it.
+    await Promise.all(paths.map((path) => removeStoredFile(path)));
+
+    const owner = await db('users').where({ id: design.owner_id }).first('id', 'name', 'email');
+    if (owner && Number(owner.id) !== Number(admin.id)) {
+      notificationService
+        .notify({
+          userId: owner.id,
+          actorId: admin.id,
+          type: NOTIFICATION_TYPE.DESIGN_REJECTED,
+          title: 'Your design was removed',
+          body: `${design.title}${note ? ` — ${note}` : ''}`,
+          // The design page is gone, so the link goes where the owner can see
+          // what is left of their library.
+          link: '/my-designs',
+          entityType: ENTITY_TYPE.DESIGN,
+          entityId: design.id,
+        })
+        .catch(() => {});
+    }
+
+    await auditService.log({
+      userId: admin.id,
+      action: 'admin.design_delete',
+      entityType: ENTITY_TYPE.DESIGN,
+      entityId: design.id,
+      changes: {
+        before: { slug: design.slug, title: design.title, status: design.status, ownerId: design.owner_id },
+        files: paths.length,
+        note: note || null,
+      },
+      context,
+    });
+
+    return { deleted: true, slug: design.slug, title: design.title, files: paths.length };
   },
 
   async setDesignFeatured(identifier, featured, admin, context = {}) {

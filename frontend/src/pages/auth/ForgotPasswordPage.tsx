@@ -2,6 +2,7 @@ import { FormEvent, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { FieldShell, TextInput } from '@/components/ui/app/FormField';
 import { FormAlert, SubmitButton } from '@/components/ui/app/FormAlert';
+import { PageHeader } from '@/components/ui/app/PageHeader';
 import { Reveal } from '@/components/ui/Reveal';
 import { authApi } from '@/lib/api/auth';
 import { useToast } from '@/app/providers/ToastProvider';
@@ -43,15 +44,11 @@ export default function ForgotPasswordPage() {
 
   return (
     <div>
-      <Reveal>
-        <p className="eyebrow text-deep-coral">Account recovery</p>
-        <h1 className="mt-2 font-display text-display-sm font-extrabold tracking-tight text-aubergine">
-          Reset your password
-        </h1>
-        <p className="mt-2 text-sm leading-relaxed text-ink-70">
-          Enter the email associated with your account and we will send a reset code.
-        </p>
-      </Reveal>
+      <PageHeader
+        eyebrow="Account recovery"
+        title="Reset your password"
+        lede="Enter the email associated with your account and we will send a reset code."
+      />
 
       <Reveal delay={0.1}>
         <form className="mt-8 space-y-5" onSubmit={handleSubmit} noValidate>
@@ -83,7 +80,7 @@ export default function ForgotPasswordPage() {
       </Reveal>
 
       <Reveal delay={0.15}>
-        <p className="mt-6 text-center text-sm text-ink-70">
+        <p className="mt-6 text-center text-sm text-muted">
           <Link to="/login" className="font-semibold text-deep-coral hover:underline">
             ← Back to sign in
           </Link>

@@ -49,33 +49,38 @@ const licences = [
 /** SCR-008 — Licence explainers. */
 export default function LicensesPage() {
   return (
-    <div className="container-content pt-24 sm:pt-28 pb-16 sm:pb-24">
-      <PageHeader
-        eyebrow="Licences"
-        title="Choose how others can reuse your work."
-        lede="Every design on Chipper declares a licence up front. Reuse should be a decision, not a risk."
-      />
+    <div className="container-content page-pad-top pb-16 sm:pb-24">
+      {/* One reading column on the page axis, heading included — legal text
+          set to the full container width is unreadable. max-w-prose is 68ch. */}
+      <div className="mx-auto max-w-prose">
+        <PageHeader
+          eyebrow="Licences"
+          title="Choose how others can reuse your work."
+          lede="Every design on Chipper declares a licence up front. Reuse should be a decision, not a risk."
+        />
 
-      <RevealGroup className="mt-12 space-y-8 sm:mt-16" stagger={0.06}>
-        {licences.map((licence) => (
-          <RevealItem key={licence.id}>
-            <section className="border-b border-line pb-8 last:border-b-0 last:pb-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="font-display text-lg font-bold text-aubergine sm:text-xl">{licence.name}</h2>
-                <StatusBadge tone={licence.tone}>{licence.id.toUpperCase()}</StatusBadge>
-              </div>
-              <p className="mt-2 text-sm font-medium text-ink-70">{licence.summary}</p>
-              <p className="mt-2 max-w-prose text-sm leading-relaxed text-ink-55 sm:text-base">{licence.detail}</p>
-            </section>
-          </RevealItem>
-        ))}
-      </RevealGroup>
+        <RevealGroup className="mt-12 space-y-8 sm:mt-16" stagger={0.06}>
+          {licences.map((licence) => (
+            <RevealItem key={licence.id}>
+              <section className="border-b border-line pb-8 last:border-b-0 last:pb-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="font-display text-lg font-bold text-aubergine sm:text-xl">{licence.name}</h2>
+                  <StatusBadge tone={licence.tone}>{licence.id.toUpperCase()}</StatusBadge>
+                </div>
+                <p className="mt-2 text-sm font-medium text-muted">{licence.summary}</p>
+                {/* The column already caps the measure — no second max-w here. */}
+                <p className="mt-2 text-sm leading-relaxed text-muted sm:text-base">{licence.detail}</p>
+              </section>
+            </RevealItem>
+          ))}
+        </RevealGroup>
 
-      <Reveal delay={0.1} className="mt-12 border-t border-line pt-10">
-        <Link to="/upload" className="btn-primary">
-          Upload with a licence
-        </Link>
-      </Reveal>
+        <Reveal delay={0.1} className="mt-12 border-t border-line pt-10">
+          <Link to="/upload" className="btn-primary w-full sm:w-auto">
+            Upload with a licence
+          </Link>
+        </Reveal>
+      </div>
     </div>
   );
 }

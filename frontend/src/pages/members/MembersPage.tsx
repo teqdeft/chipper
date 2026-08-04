@@ -1,9 +1,10 @@
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { EmptyState } from '@/components/ui/app/EmptyState';
 import { StatusBadge } from '@/components/ui/app/StatusBadge';
 import { ErrorState, LoadingState } from '@/components/ui/app/LoadingState';
 import { Pagination } from '@/components/ui/app/Pagination';
+import { PageHeader } from '@/components/ui/app/PageHeader';
 import { Avatar } from '@/components/ui/app/Avatar';
 import { useApiResource } from '@/hooks/useApiResource';
 import { userApi } from '@/lib/api/users';
@@ -48,6 +49,27 @@ export default function MembersPage() {
 
   // Local mirror so typing stays responsive; the URL is updated on a debounce.
   const [term, setTerm] = useState(search);
+
+  /**
+   * The Clear/Search buttons float over the right end of the input, so the text
+   * has to stop before they start. A fixed padding cannot do that: "Clear"
+   * appears only once something is typed, which is exactly when the text would
+   * run under it. So the actual button strip is measured instead — that also
+   * survives a font swap or a translated label.
+   */
+  const actionsRef = useRef<HTMLSpanElement>(null);
+  const [actionsWidth, setActionsWidth] = useState(0);
+
+  useLayoutEffect(() => {
+    const node = actionsRef.current;
+    if (!node) return;
+    const measure = () => setActionsWidth(node.offsetWidth);
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     setTerm(search);
@@ -116,32 +138,20 @@ export default function MembersPage() {
   }
 
   return (
-    <div className="-mt-6 pb-16 sm:-mt-8 sm:pb-24">
-      <section className="relative overflow-hidden border-b border-line">
-        <div
-          className="pointer-events-none absolute inset-0"
-          aria-hidden
-          style={{
-            background:
-              'radial-gradient(ellipse 75% 65% at 8% -20%, rgba(153,153,221,0.22), transparent 55%), radial-gradient(ellipse 55% 45% at 95% 0%, rgba(252,113,71,0.12), transparent 50%), linear-gradient(180deg, #fffcf9 0%, #f7f4ff 60%, #fffcf9 100%)',
-          }}
-        />
-
-        <div className="container-content relative py-10 sm:py-14">
-          <p className="eyebrow text-deep-coral">Community</p>
-          <h1 className="mt-2 max-w-2xl font-display text-display-sm font-extrabold tracking-tight text-aubergine">
-            Find members
-          </h1>
-          <p className="mt-3 max-w-xl text-base leading-relaxed text-ink-70 sm:text-[1.05rem]">
-            Search researchers, students and institutions by name, handle or affiliation — then open
-            a profile or start a conversation.
-          </p>
+    <div className="page-pad-flush pb-16 sm:pb-24">
+      <section className="border-b border-line bg-canvas">
+        <div className="container-content pb-8 pt-[var(--page-pad-y)] sm:pb-10 sm:pt-[var(--page-pad-y-sm)]">
+          <PageHeader
+            eyebrow="Community"
+            title="Find members"
+            lede="Search researchers, students and institutions by name, handle or affiliation — then open a profile or start a conversation."
+          />
 
           <form onSubmit={onSubmit} role="search" className="mt-8 max-w-2xl">
             <label className="relative block">
               <span className="sr-only">Search members</span>
               <span
-                className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-ink-40"
+                className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-muted"
                 aria-hidden
               >
                 <SearchIcon />
@@ -153,14 +163,24 @@ export default function MembersPage() {
                 placeholder="Name, @handle or affiliation — e.g. Twente"
                 autoComplete="off"
                 autoFocus
-                className="w-full rounded-[14px] border border-line bg-canvas py-3.5 pl-11 pr-24 text-sm text-aubergine shadow-soft outline-none transition-[border-color,box-shadow] placeholder:text-ink-40 focus:border-line-strong focus:shadow-ring sm:rounded-2xl sm:text-[0.95rem]"
+                // WebKit draws its own × inside a search field. It would land
+                // under the buttons below, so it is dropped in favour of the
+                // "Clear" button that is already there.
+                // pr-28 is only the floor for the first paint and for a browser
+                // with no ResizeObserver; the measured value below overrides it.
+                className="w-full rounded-field border border-line-strong bg-canvas py-3.5 pl-11 pr-28 text-sm text-aubergine shadow-soft outline-none transition-[border-color,box-shadow] placeholder:text-muted focus:shadow-ring sm:text-[0.95rem] [&::-webkit-search-cancel-button]:appearance-none"
+                // The 8px matches `right-2` on the strip, plus a little air.
+                style={{ paddingRight: actionsWidth ? actionsWidth + 16 : undefined }}
               />
-              <span className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1">
+              <span
+                ref={actionsRef}
+                className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1"
+              >
                 {term ? (
                   <button
                     type="button"
                     onClick={clearSearch}
-                    className="rounded-btn px-2.5 py-1.5 text-xs font-semibold text-ink-55 transition-colors hover:bg-periwinkle-tint hover:text-aubergine"
+                    className="rounded-btn px-2.5 py-1.5 text-xs font-semibold text-muted transition-colors hover:bg-periwinkle-tint hover:text-aubergine"
                   >
                     Clear
                   </button>
@@ -185,7 +205,7 @@ export default function MembersPage() {
                     'rounded-full border px-3.5 py-1.5 text-sm font-semibold transition-colors',
                     active
                       ? 'border-aubergine bg-aubergine text-canvas'
-                      : 'border-line bg-canvas text-ink-70 hover:border-line-strong hover:text-aubergine',
+                      : 'border-line bg-canvas text-muted hover:border-line-strong hover:text-aubergine',
                   )}
                 >
                   {filter.label}
@@ -221,7 +241,7 @@ export default function MembersPage() {
                   setTerm('');
                   updateParams({ q: null, type: null, page: null });
                 }}
-                className="btn-ghost mt-6 inline-flex text-sm"
+                className="btn-ghost mt-6 w-full sm:w-auto text-sm"
               >
                 Clear filters
               </button>
@@ -230,7 +250,7 @@ export default function MembersPage() {
         ) : (
           <>
             <div className="flex flex-wrap items-end justify-between gap-3">
-              <p className="text-sm text-ink-55">
+              <p className="text-sm text-muted">
                 <span className="font-display text-lg font-bold tabular-nums text-aubergine">
                   {total.toLocaleString()}
                 </span>{' '}
@@ -243,7 +263,7 @@ export default function MembersPage() {
                 ) : null}
                 {accountType ? <> · {ACCOUNT_TYPE_LABEL[accountType] ?? accountType}</> : null}
               </p>
-              <p className="text-xs text-ink-40">Sorted by reputation</p>
+              <p className="text-xs text-muted">Sorted by reputation</p>
             </div>
 
             <div className="grid auto-rows-fr gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -277,7 +297,7 @@ function MemberCardLink({ member }: { member: MemberSummary }) {
             <span className="block truncate text-sm font-semibold text-aubergine transition-colors group-hover:text-deep-coral">
               {member.name}
             </span>
-            <span className="mt-0.5 block truncate text-xs text-ink-55">@{member.handle}</span>
+            <span className="mt-0.5 block truncate text-xs text-muted">@{member.handle}</span>
           </span>
           {member.accountType ? (
             <StatusBadge tone={isInstitution ? 'periwinkle' : 'coral'} className="shrink-0">
@@ -293,13 +313,13 @@ function MemberCardLink({ member }: { member: MemberSummary }) {
         <span
           className={cn(
             'mt-1.5 block truncate text-xs',
-            member.affiliation ? 'text-ink-70' : 'text-ink-40',
+            member.affiliation ? 'text-muted' : 'text-muted',
           )}
         >
           {member.affiliation || 'No affiliation listed'}
         </span>
 
-        <span className="mt-auto flex h-6 items-center gap-2 overflow-hidden pt-2 text-[0.7rem] text-ink-55">
+        <span className="mt-auto flex h-6 items-center gap-2 overflow-hidden pt-2 text-[0.7rem] text-muted">
           {expertise[0] ? (
             <span className="pill max-w-[7rem] shrink-0 truncate !px-2 !py-0.5 !text-[0.65rem] bg-periwinkle-tint text-deep-periwinkle">
               {expertise[0]}

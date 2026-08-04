@@ -8,7 +8,17 @@ import { ErrorState, LoadingState } from '@/components/ui/app/LoadingState';
 import { Reveal } from '@/components/ui/Reveal';
 import { useApiResource } from '@/hooks/useApiResource';
 import { useToast } from '@/app/providers/ToastProvider';
-import { designApi, taxonomyApi } from '@/lib/api/designs';
+import {
+  designApi,
+  taxonomyApi,
+  acceptAttribute,
+  extensionOf,
+  ACCEPTED_DESIGN_EXTENSIONS,
+  COVER_EXTENSIONS,
+  MAX_COVER_IMAGES,
+  MAX_COVER_BYTES,
+  MAX_DESIGN_FILE_BYTES,
+} from '@/lib/api/designs';
 import type { ComponentType, ComponentTypeField, DesignPayload, Taxonomies } from '@/lib/api/designs';
 import { ApiError } from '@/lib/api/client';
 import { cn } from '@/lib/utils';
@@ -26,7 +36,7 @@ import { cn } from '@/lib/utils';
  */
 
 const steps = [
-  { label: 'Files', description: 'Upload geometry' },
+  { label: 'Files', description: 'Geometry & covers' },
   { label: 'Core', description: 'Name & description' },
   { label: 'Classification', description: 'Type & publish as' },
   { label: 'Type fields', description: 'Component specs' },
@@ -35,7 +45,8 @@ const steps = [
   { label: 'Review', description: 'Publish' },
 ];
 
-const MAX_FILE_BYTES = 500 * 1024 * 1024;
+const ACCEPT_ATTRIBUTE = acceptAttribute(ACCEPTED_DESIGN_EXTENSIONS);
+const COVER_ACCEPT_ATTRIBUTE = acceptAttribute(COVER_EXTENSIONS);
 
 type FormState = {
   title: string;
@@ -142,14 +153,26 @@ function formatBytes(bytes: number) {
  * licence was never chosen; the server still enforces the same set, so this is
  * a courtesy, not the guarantee.
  */
-function validateStep(step: number, form: FormState, files: File[], fields: ComponentTypeField[]): Errors {
+function validateStep(
+  step: number,
+  form: FormState,
+  files: File[],
+  covers: File[],
+  fields: ComponentTypeField[],
+): Errors {
   const errors: Errors = {};
   const required = (key: keyof FormState, message: string) => {
     if (!String(form[key] ?? '').trim()) errors[key] = message;
   };
 
-  if (step === 0 && files.length === 0) {
-    errors.files = 'Upload at least one file — a design without geometry cannot be published';
+  if (step === 0) {
+    if (files.length === 0) {
+      errors.files = 'Upload at least one file — a design without geometry cannot be published';
+    }
+    if (covers.length === 0) {
+      errors.coverImages =
+        'Add at least one cover image — it is what people see on browse cards and next to the 3D model';
+    }
   }
 
   if (step === 1) {
@@ -229,10 +252,12 @@ export default function UploadWizardPage() {
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<FormState>(initialForm);
   const [files, setFiles] = useState<File[]>([]);
+  const [covers, setCovers] = useState<File[]>([]);
   const [errors, setErrors] = useState<Errors>({});
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const coverInputRef = useRef<HTMLInputElement>(null);
 
   /**
    * Survives a partial failure: once the draft exists, retrying the publish
@@ -262,6 +287,17 @@ export default function UploadWizardPage() {
 
   const typeFields = componentType?.fields ?? [];
 
+  /** Local previews for the picked covers; revoked whenever the set changes. */
+  const coverPreviews = useMemo(
+    () => covers.map((file) => ({ file, url: URL.createObjectURL(file) })),
+    [covers],
+  );
+
+  useEffect(
+    () => () => coverPreviews.forEach((preview) => URL.revokeObjectURL(preview.url)),
+    [coverPreviews],
+  );
+
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((f) => ({ ...f, [key]: value }));
     setErrors((e) => (e[key] ? { ...e, [key]: undefined } : e));
@@ -287,8 +323,13 @@ export default function UploadWizardPage() {
       const rejected: string[] = [];
 
       for (const file of Array.from(incoming)) {
-        if (file.size > MAX_FILE_BYTES) {
+        if (file.size > MAX_DESIGN_FILE_BYTES) {
           rejected.push(`${file.name} is larger than 500 MB`);
+          continue;
+        }
+        const ext = extensionOf(file.name);
+        if (!ACCEPTED_DESIGN_EXTENSIONS.includes(ext)) {
+          rejected.push(`${file.name} is not a supported file type`);
           continue;
         }
         accepted.push(file);
@@ -307,12 +348,53 @@ export default function UploadWizardPage() {
     [toast],
   );
 
+  const addCovers = useCallback(
+    (incoming: FileList | null) => {
+      if (!incoming?.length) return;
+      const accepted: File[] = [];
+      const rejected: string[] = [];
+
+      for (const file of Array.from(incoming)) {
+        if (!COVER_EXTENSIONS.includes(extensionOf(file.name))) {
+          rejected.push(`${file.name} is not a ${COVER_EXTENSIONS.join('/').toUpperCase()} image`);
+          continue;
+        }
+        if (file.size > MAX_COVER_BYTES) {
+          rejected.push(`${file.name} is larger than 10 MB`);
+          continue;
+        }
+        accepted.push(file);
+      }
+
+      if (rejected.length) toast.warning('Some images were skipped', rejected.join(', '));
+      if (!accepted.length) return;
+
+      setCovers((current) => {
+        const seen = new Set(current.map((f) => f.name.toLowerCase()));
+        const merged = [...current, ...accepted.filter((f) => !seen.has(f.name.toLowerCase()))];
+        if (merged.length > MAX_COVER_IMAGES) {
+          toast.warning(
+            'Only the first three are used',
+            `A design shows at most ${MAX_COVER_IMAGES} cover images.`,
+          );
+        }
+        return merged.slice(0, MAX_COVER_IMAGES);
+      });
+      setErrors((e) => ({ ...e, coverImages: undefined }));
+    },
+    [toast],
+  );
+
   function removeFile(name: string) {
     setFiles((current) => current.filter((f) => f.name !== name));
   }
 
+  function removeCover(name: string) {
+    setCovers((current) => current.filter((f) => f.name !== name));
+  }
+
   function next() {
-    const stepErrors = validateStep(step, form, files, typeFields);
+    const stepErrors = validateStep(step, form, files, covers, typeFields);
     if (Object.keys(stepErrors).length) {
       setErrors(stepErrors);
       return;
@@ -412,7 +494,7 @@ export default function UploadWizardPage() {
 
   /** Maps the API's field paths back onto the step that owns them. */
   function stepForField(field: string): number {
-    if (field === 'files') return 0;
+    if (['files', 'coverImages', 'coverIndexes'].includes(field)) return 0;
     if (['title', 'summary', 'description', 'tags'].includes(field)) return 1;
     if (
       ['componentType', 'resourceType', 'publishAs', 'instituteName', 'organs', 'testedMaterial', 'testedFabricationMethod'].includes(
@@ -430,7 +512,7 @@ export default function UploadWizardPage() {
     // Re-run every gating step: a user can reach Review by editing state and
     // stepping back, and the last step has no validation of its own.
     for (const gated of VALIDATED_STEPS) {
-      const stepErrors = validateStep(gated, form, files, typeFields);
+      const stepErrors = validateStep(gated, form, files, covers, typeFields);
       if (Object.keys(stepErrors).length) {
         setErrors(stepErrors);
         setStep(gated);
@@ -451,9 +533,13 @@ export default function UploadWizardPage() {
 
       const draft = draftRef.current;
 
-      // 2 — the files, under the names the user gave them.
+      // 2 — the files, under the names the user gave them. Covers ride along in
+      // the same request and are nominated by their position in it.
       if (!draft.filesUploaded) {
-        await designApi.addFiles(draft.slug, files, { primaryIndex: 0 });
+        await designApi.addFiles(draft.slug, [...files, ...covers], {
+          primaryIndex: 0,
+          coverIndexes: covers.map((_, index) => files.length + index),
+        });
         draft.filesUploaded = true;
       }
 
@@ -600,9 +686,12 @@ export default function UploadWizardPage() {
           {step === 0 && (
             <div className="space-y-6">
               <h2 className="font-display text-lg font-bold text-aubergine">Design files *</h2>
-              <p className="text-sm text-ink-70">
+              <p className="text-sm text-muted">
                 Files are version-tracked with every publish and are stored under the exact names you
-                upload them with. STL, STEP, PDF or ZIP — up to 500 MB each.
+                upload them with. Up to 500 MB each. Upload an STL, 3MF, OBJ, PLY, GLB or FBX and it
+                gets a 3D preview on the design page. Everything else — STEP, IGES, DXF, GDSII,
+                G-code, FreeCAD, OpenSCAD — is stored and served for download. Upload files
+                individually rather than as an archive, so each one stays searchable.
               </p>
 
               <div
@@ -619,10 +708,13 @@ export default function UploadWizardPage() {
                 )}
               >
                 <p className="font-display text-base font-bold text-aubergine">Drop files here</p>
-                <p className="mt-2 text-sm text-ink-70">STL, STEP, PDF, ZIP or images</p>
+                <p className="mt-2 text-sm text-muted">
+                  STL, 3MF, OBJ, PLY, GLB, FBX, STEP, IGES, DXF, GDSII, G-code, FreeCAD, OpenSCAD,
+                  PDF or images
+                </p>
                 <button
                   type="button"
-                  className="btn-ghost mt-6 inline-flex"
+                  className="btn-ghost mt-6 w-full sm:w-auto"
                   onClick={() => fileInputRef.current?.click()}
                 >
                   Choose files
@@ -632,6 +724,7 @@ export default function UploadWizardPage() {
                   type="file"
                   className="sr-only"
                   multiple
+                  accept={ACCEPT_ATTRIBUTE}
                   onChange={(e) => {
                     addFiles(e.target.files);
                     // Reset so re-picking the same file still fires onChange.
@@ -648,7 +741,7 @@ export default function UploadWizardPage() {
                     <li key={file.name} className="flex items-center justify-between gap-4 px-4 py-3">
                       <div className="min-w-0">
                         <p className="truncate text-sm font-semibold text-aubergine">{file.name}</p>
-                        <p className="text-xs text-ink-55">
+                        <p className="text-xs text-muted">
                           {formatBytes(file.size)}
                           {index === 0 ? ' · primary file' : ''}
                         </p>
@@ -664,6 +757,89 @@ export default function UploadWizardPage() {
                   ))}
                 </ul>
               ) : null}
+
+              <div className="space-y-4 border-t border-line pt-6">
+                <h2 className="font-display text-lg font-bold text-aubergine">Cover images *</h2>
+                <p className="text-sm text-muted">
+                  One to {MAX_COVER_IMAGES} photos or renders of the chip. The first is the thumbnail on
+                  browse cards; all of them sit beside the 3D preview on your design page. JPG, PNG or
+                  WebP, up to 10 MB each.
+                </p>
+
+                <div
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    addCovers(e.dataTransfer.files);
+                  }}
+                  className={cn(
+                    'rounded-field border-2 border-dashed px-6 py-8 text-center transition-colors',
+                    errors.coverImages
+                      ? 'border-deep-coral bg-coral/5'
+                      : 'border-line-strong bg-periwinkle-tint/20',
+                  )}
+                >
+                  <p className="font-display text-base font-bold text-aubergine">
+                    Drop cover images here
+                  </p>
+                  <p className="mt-2 text-sm text-muted">
+                    {covers.length}/{MAX_COVER_IMAGES} added
+                  </p>
+                  <button
+                    type="button"
+                    className="btn-ghost mt-5 w-full sm:w-auto"
+                    onClick={() => coverInputRef.current?.click()}
+                    disabled={covers.length >= MAX_COVER_IMAGES}
+                  >
+                    Choose images
+                  </button>
+                  <input
+                    ref={coverInputRef}
+                    type="file"
+                    className="sr-only"
+                    multiple
+                    accept={COVER_ACCEPT_ATTRIBUTE}
+                    onChange={(e) => {
+                      addCovers(e.target.files);
+                      e.target.value = '';
+                    }}
+                  />
+                </div>
+
+                {errors.coverImages ? (
+                  <p className="text-sm font-medium text-deep-coral">{errors.coverImages}</p>
+                ) : null}
+
+                {coverPreviews.length > 0 ? (
+                  <ul className="grid grid-cols-3 gap-3">
+                    {coverPreviews.map((preview, index) => (
+                      <li
+                        key={preview.file.name}
+                        className="group relative overflow-hidden rounded-field border border-line"
+                      >
+                        <img
+                          src={preview.url}
+                          alt={preview.file.name}
+                          className="aspect-square w-full object-cover"
+                        />
+                        {index === 0 ? (
+                          <span className="absolute left-1.5 top-1.5 rounded-pill bg-canvas/90 px-2 py-0.5 text-[0.62rem] font-bold uppercase tracking-wider text-deep-periwinkle">
+                            Thumbnail
+                          </span>
+                        ) : null}
+                        <button
+                          type="button"
+                          onClick={() => removeCover(preview.file.name)}
+                          aria-label={`Remove ${preview.file.name}`}
+                          className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-aubergine/80 text-xs font-bold text-canvas transition-colors hover:bg-deep-coral"
+                        >
+                          ×
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
             </div>
           )}
 
@@ -784,7 +960,7 @@ export default function UploadWizardPage() {
                           onClick={() => toggleOrgan(organ.slug)}
                           aria-pressed={active}
                           className={
-                            active ? 'pill border-coral bg-coral/15 text-deep-coral' : 'pill text-ink-70'
+                            active ? 'pill border-coral bg-coral/15 text-deep-coral' : 'pill text-muted'
                           }
                         >
                           {organ.name}
@@ -830,12 +1006,12 @@ export default function UploadWizardPage() {
               <h2 className="font-display text-lg font-bold text-aubergine">
                 {componentType?.name ?? 'Component'} fields
               </h2>
-              <p className="text-sm text-ink-70">
+              <p className="text-sm text-muted">
                 Specs change per component type — same structure as the file page.
               </p>
 
               {typeFields.length === 0 ? (
-                <p className="text-sm text-ink-55">
+                <p className="text-sm text-muted">
                   No extra type-specific fields for this component type.
                 </p>
               ) : (
@@ -847,7 +1023,7 @@ export default function UploadWizardPage() {
           {step === 4 && (
             <div className="space-y-5">
               <h2 className="font-display text-lg font-bold text-aubergine">How to use this chip</h2>
-              <p className="text-sm text-ink-70">
+              <p className="text-sm text-muted">
                 ISO 22916 operating parameters — CLIP-string, clamping, temp, pressure, flow rate.
                 Optional, but they are what makes a design reusable.
               </p>
@@ -931,7 +1107,7 @@ export default function UploadWizardPage() {
                   <span className="block text-sm font-semibold text-aubergine">
                     This design is ISO 22916 compliant
                   </span>
-                  <span className="mt-1 block text-sm text-ink-70">
+                  <span className="mt-1 block text-sm text-muted">
                     Confirmed before publishing — CLIP-string and clamping zone declared.
                   </span>
                 </span>
@@ -1067,6 +1243,10 @@ export default function UploadWizardPage() {
               <dl className="divide-y divide-line rounded-field border border-line">
                 {[
                   ['Files', files.length ? files.map((f) => f.name).join(', ') : 'None selected'],
+                  [
+                    'Cover images',
+                    covers.length ? covers.map((f) => f.name).join(', ') : 'None selected',
+                  ],
                   ['Name', form.title || '—'],
                   ['Summary', form.summary || '—'],
                   ['Component type', componentType?.name ?? '—'],
@@ -1099,20 +1279,22 @@ export default function UploadWizardPage() {
                   ['Keywords', form.keywords || '—'],
                 ].map(([key, value]) => (
                   <div key={key} className="flex flex-col gap-1 px-4 py-3 sm:flex-row sm:justify-between">
-                    <dt className="text-sm text-ink-55">{key}</dt>
+                    <dt className="text-sm text-muted">{key}</dt>
                     <dd className="text-sm font-semibold text-aubergine sm:text-right">{value}</dd>
                   </div>
                 ))}
               </dl>
-              <p className="text-sm text-ink-70">
+              <p className="text-sm text-muted">
                 Publishing sends your design to review. Metadata stays version-tracked, and your files
                 keep the names you uploaded them with.
               </p>
             </div>
           )}
 
-          <div className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-6">
-            <div>
+          <div className="mt-8 flex flex-col gap-3 border-t border-line pt-6 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+            {/* Column, so the button stretches to the row on mobile. A bare
+                div would leave the inline-flex button at its text width. */}
+            <div className="flex flex-col">
               {step > 0 ? (
                 <button type="button" onClick={back} className="btn-ghost" disabled={submitting}>
                   Back
@@ -1123,7 +1305,7 @@ export default function UploadWizardPage() {
                 </Link>
               )}
             </div>
-            <div className="flex gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row">
               {step < steps.length - 1 ? (
                 <button type="button" onClick={next} className="btn-primary">
                   Next
@@ -1139,7 +1321,7 @@ export default function UploadWizardPage() {
       </Reveal>
 
       <Reveal delay={0.12}>
-        <p className="text-center text-xs text-ink-55">
+        <p className="text-center text-xs text-muted">
           Need help?{' '}
           <Link to="/how-it-works" className="font-semibold text-deep-coral hover:underline">
             Read the upload guide

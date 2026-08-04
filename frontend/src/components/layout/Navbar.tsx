@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   AnimatePresence,
@@ -15,6 +15,7 @@ import { useToast } from '@/app/providers/ToastProvider';
 import { canAccess, ROLE_LABEL } from '@/lib/access';
 import type { ScreenKey } from '@/lib/access';
 import { messageApi } from '@/lib/api/messages';
+import { notificationApi } from '@/lib/api/notifications';
 
 const ease = [0.22, 1, 0.36, 1] as const;
 
@@ -53,12 +54,16 @@ type NavbarProps = {
   mode?: 'marketing' | 'app';
 };
 
-function navLinkClass(isActive: boolean) {
+function navLinkClass(isActive: boolean, onDark: boolean) {
   return cn(
     'relative text-sm font-medium transition-colors after:absolute after:-bottom-1.5 after:left-0 after:h-px after:bg-coral after:transition-all after:duration-300',
-    isActive
-      ? 'text-aubergine after:w-full'
-      : 'text-ink-70 after:w-0 hover:text-aubergine hover:after:w-full',
+    onDark
+      ? isActive
+        ? 'text-canvas after:w-full'
+        : 'text-canvas/70 after:w-0 hover:text-canvas hover:after:w-full'
+      : isActive
+        ? 'text-aubergine after:w-full'
+        : 'text-muted after:w-0 hover:text-aubergine hover:after:w-full',
   );
 }
 
@@ -73,18 +78,22 @@ export default function Navbar({ mode = 'marketing' }: NavbarProps) {
   // their profile vanish and come back on each refresh.
   const { user, viewer, isAuthenticated, isLoading: isSessionLoading } = useAuth();
   const isHome = pathname === '/';
-  const [scrolled, setScrolled] = useState(mode === 'app' || !isHome);
+  /** True while the sticky bar still sits on the aubergine hero band. */
+  const [overAubergine, setOverAubergine] = useState(mode === 'marketing' && isHome);
   const [open, setOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [mobileAccountOpen, setMobileAccountOpen] = useState(false);
   const [unreadMessages, setUnreadMessages] = useState(0);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
   const reduced = useReducedMotion();
-  const solid = mode === 'app' || !isHome || scrolled || open || mobileAccountOpen;
+  const onDarkHero = mode === 'marketing' && isHome && overAubergine && !open && !mobileAccountOpen;
+  const solid = mode === 'app' || !isHome || !overAubergine || open || mobileAccountOpen;
   const anyOverlay = open || mobileAccountOpen;
 
   useEffect(() => {
     if (!isAuthenticated) {
       setUnreadMessages(0);
+      setUnreadNotifications(0);
       return;
     }
     let cancelled = false;
@@ -93,6 +102,12 @@ export default function Navbar({ mode = 'marketing' }: NavbarProps) {
         .unreadCount()
         .then((count) => {
           if (!cancelled) setUnreadMessages(count);
+        })
+        .catch(() => {});
+      void notificationApi
+        .unreadCount()
+        .then((count) => {
+          if (!cancelled) setUnreadNotifications(count);
         })
         .catch(() => {});
     };
@@ -106,14 +121,44 @@ export default function Navbar({ mode = 'marketing' }: NavbarProps) {
 
   useEffect(() => {
     if (mode === 'app' || !isHome) {
-      setScrolled(true);
+      setOverAubergine(false);
       return;
     }
-    const onScroll = () => setScrolled(window.scrollY > 40);
-    onScroll();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, [mode, isHome]);
+
+    let cancelled = false;
+    let observer: IntersectionObserver | null = null;
+
+    const attach = () => {
+      const hero = document.getElementById('hero');
+      if (!hero || cancelled) return false;
+      observer = new IntersectionObserver(
+        ([entry]) => {
+          // Nav sits on aubergine while the hero sticky band still intersects the top.
+          setOverAubergine(entry.isIntersecting);
+        },
+        { rootMargin: '-1px 0px -70% 0px', threshold: [0, 0.01, 0.1] },
+      );
+      observer.observe(hero);
+      return true;
+    };
+
+    if (!attach()) {
+      // Hero mounts with the page; retry once on next frame if needed.
+      const raf = requestAnimationFrame(() => {
+        if (!attach()) setOverAubergine(true);
+      });
+      return () => {
+        cancelled = true;
+        cancelAnimationFrame(raf);
+        observer?.disconnect();
+      };
+    }
+
+    return () => {
+      cancelled = true;
+      observer?.disconnect();
+    };
+  }, [mode, isHome, pathname]);
 
   useEffect(() => {
     document.body.style.overflow = anyOverlay ? 'hidden' : '';
@@ -178,13 +223,21 @@ export default function Navbar({ mode = 'marketing' }: NavbarProps) {
             setMobileAccountOpen(false);
           }}
         >
-          <Logo className="h-6 text-aubergine sm:h-7" />
+          <Logo
+            className={cn(
+              'h-6 transition-colors duration-500 ease-premium sm:h-7',
+              onDarkHero ? 'text-canvas' : 'text-aubergine',
+            )}
+          />
         </Link>
 
         <ul className="hidden items-center gap-8 md:flex">
           {nav.map((item) => (
             <li key={item.href}>
-              <NavLink to={item.href} className={({ isActive }) => navLinkClass(isActive)}>
+              <NavLink
+                to={item.href}
+                className={({ isActive }) => navLinkClass(isActive, onDarkHero)}
+              >
                 {item.label}
               </NavLink>
             </li>
@@ -201,7 +254,12 @@ export default function Navbar({ mode = 'marketing' }: NavbarProps) {
             <>
               <Link
                 to="/members"
-                className="flex h-10 w-10 items-center justify-center rounded-btn text-ink-70 transition-colors hover:bg-periwinkle-tint/60 hover:text-aubergine"
+                className={cn(
+                  'flex h-10 w-10 items-center justify-center rounded-btn transition-colors',
+                  onDarkHero
+                    ? 'text-canvas/75 hover:bg-canvas/10 hover:text-canvas'
+                    : 'text-muted hover:bg-periwinkle-tint/60 hover:text-aubergine',
+                )}
                 aria-label="Find members"
                 title="Find members"
               >
@@ -209,7 +267,12 @@ export default function Navbar({ mode = 'marketing' }: NavbarProps) {
               </Link>
               <Link
                 to="/messages"
-                className="relative flex h-10 w-10 items-center justify-center rounded-btn text-ink-70 transition-colors hover:bg-periwinkle-tint/60 hover:text-aubergine"
+                className={cn(
+                  'relative flex h-10 w-10 items-center justify-center rounded-btn transition-colors',
+                  onDarkHero
+                    ? 'text-canvas/75 hover:bg-canvas/10 hover:text-canvas'
+                    : 'text-muted hover:bg-periwinkle-tint/60 hover:text-aubergine',
+                )}
                 aria-label={unreadMessages > 0 ? `Messages, ${unreadMessages} unread` : 'Messages'}
                 title="Messages"
               >
@@ -222,15 +285,28 @@ export default function Navbar({ mode = 'marketing' }: NavbarProps) {
               </Link>
               <Link
                 to="/notifications"
-                className="relative flex h-10 w-10 items-center justify-center rounded-btn text-ink-70 transition-colors hover:bg-periwinkle-tint/60 hover:text-aubergine"
-                aria-label="Notifications"
+                className={cn(
+                  'relative flex h-10 w-10 items-center justify-center rounded-btn transition-colors',
+                  onDarkHero
+                    ? 'text-canvas/75 hover:bg-canvas/10 hover:text-canvas'
+                    : 'text-muted hover:bg-periwinkle-tint/60 hover:text-aubergine',
+                )}
+                aria-label={
+                  unreadNotifications > 0
+                    ? `Notifications, ${unreadNotifications} unread`
+                    : 'Notifications'
+                }
                 title="Notifications"
               >
                 <IconBell />
-                <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-coral" aria-hidden />
+                {unreadNotifications > 0 ? (
+                  <span className="absolute right-1.5 top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-deep-coral px-1 text-[0.6rem] font-bold leading-none text-canvas">
+                    {unreadNotifications > 9 ? '9+' : unreadNotifications}
+                  </span>
+                ) : null}
               </Link>
               {canAccess(viewer, 'upload') ? (
-                <Link to="/upload" className="btn-primary !px-4 !py-2 text-sm">
+                <Link to="/upload" className="btn-primary !px-4 !py-2.5 text-sm">
                   Upload
                 </Link>
               ) : null}
@@ -255,7 +331,7 @@ export default function Navbar({ mode = 'marketing' }: NavbarProps) {
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: 4 }}
                       transition={{ duration: 0.2, ease }}
-                      className="absolute right-0 mt-2 w-52 overflow-hidden rounded-[12px] border border-line bg-canvas py-1.5 shadow-soft"
+                      className="absolute right-0 mt-2 w-52 overflow-hidden rounded-card border border-line bg-surface py-1.5 shadow-soft"
                     >
                       <AccountLinks onNavigate={() => setAccountOpen(false)} />
                     </motion.div>
@@ -265,17 +341,25 @@ export default function Navbar({ mode = 'marketing' }: NavbarProps) {
             </>
           ) : (
             <>
-              <Link to="/login" className="btn-ghost !px-4 !py-2 text-sm">
+              <Link
+                to="/login"
+                className={cn(
+                  'btn-ghost !px-4 !py-2.5 text-sm transition-colors duration-500',
+                  onDarkHero && 'btn-ghost-invert',
+                )}
+              >
                 Sign in
               </Link>
-              <Link to="/register" className="btn-primary !px-4 !py-2 text-sm">
+              <Link to="/register" className="btn-primary !px-4 !py-2.5 text-sm">
                 Upload a design
               </Link>
             </>
           )}
         </div>
 
-        <div className="flex items-center gap-1 md:hidden">
+        {/* gap-2.5, not less: the avatar's ring-offset eats into anything tighter
+            and the two controls read as one blob. */}
+        <div className="flex items-center gap-2.5 md:hidden">
           {isSessionLoading ? (
             <span className="h-9 w-9 animate-pulse rounded-full bg-periwinkle-tint/60" aria-hidden />
           ) : isAuthenticated ? (
@@ -298,7 +382,10 @@ export default function Navbar({ mode = 'marketing' }: NavbarProps) {
           ) : null}
           <button
             type="button"
-            className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-aubergine shadow-sm"
+            className={cn(
+              'relative flex h-10 w-10 items-center justify-center rounded-btn shadow-sm transition-colors duration-500 ease-premium',
+              onDarkHero ? 'bg-canvas/15 ring-1 ring-canvas/35' : 'bg-aubergine',
+            )}
             aria-label={open ? 'Close menu' : 'Open menu'}
             aria-expanded={open}
             onClick={openMobileNav}
@@ -306,19 +393,19 @@ export default function Navbar({ mode = 'marketing' }: NavbarProps) {
             <span className="relative block h-3.5 w-5">
               <span
                 className={cn(
-                  'absolute left-0 h-[1.5px] w-5 origin-center rounded-full bg-white transition-all duration-300 ease-premium',
+                  'absolute left-0 h-[1.5px] w-5 origin-center rounded-full bg-surface transition-all duration-300 ease-premium',
                   open ? 'top-[6px] rotate-45' : 'top-0',
                 )}
               />
               <span
                 className={cn(
-                  'absolute left-0 top-[6px] h-[1.5px] w-5 rounded-full bg-white transition-all duration-300 ease-premium',
+                  'absolute left-0 top-[6px] h-[1.5px] w-5 rounded-full bg-surface transition-all duration-300 ease-premium',
                   open ? 'translate-x-1 scale-x-0 opacity-0' : 'opacity-100',
                 )}
               />
               <span
                 className={cn(
-                  'absolute left-0 h-[1.5px] w-5 origin-center rounded-full bg-white transition-all duration-300 ease-premium',
+                  'absolute left-0 h-[1.5px] w-5 origin-center rounded-full bg-surface transition-all duration-300 ease-premium',
                   open ? 'top-[6px] -rotate-45' : 'top-[12px]',
                 )}
               />
@@ -327,7 +414,7 @@ export default function Navbar({ mode = 'marketing' }: NavbarProps) {
         </div>
       </nav>
 
-      {/* ── Mobile site navigation ─────────────────────────────────────── */}
+      {/* â”€â”€ Mobile site navigation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <AnimatePresence>
         {open && (
           <motion.div
@@ -348,7 +435,7 @@ export default function Navbar({ mode = 'marketing' }: NavbarProps) {
                 backgroundImage: [
                   'radial-gradient(85% 50% at 100% 0%, rgba(252,113,71,0.14) 0%, transparent 55%)',
                   'radial-gradient(70% 45% at 0% 100%, rgba(153,153,221,0.12) 0%, transparent 50%)',
-                  'linear-gradient(180deg, #FFFCF9 0%, #FFF8F3 100%)',
+                  'linear-gradient(180deg, #FFFCF9 0%, rgba(255,231,222,0.25) 100%)',
                 ].join(', '),
               }}
               aria-hidden
@@ -363,7 +450,7 @@ export default function Navbar({ mode = 'marketing' }: NavbarProps) {
                 exit="closed"
               >
                 <motion.p
-                  className="mb-5 font-sans text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-ink-40"
+                  className="mb-5 font-sans text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-muted"
                   variants={reduced ? undefined : itemVariants}
                 >
                   Menu
@@ -397,7 +484,7 @@ export default function Navbar({ mode = 'marketing' }: NavbarProps) {
                                   'flex h-8 w-8 items-center justify-center rounded-full transition-all duration-300',
                                   isActive
                                     ? 'bg-coral/12 text-coral'
-                                    : 'bg-transparent text-ink-40 group-active:bg-periwinkle-tint/60 group-active:text-aubergine',
+                                    : 'bg-transparent text-muted group-active:bg-periwinkle-tint/60 group-active:text-aubergine',
                                 )}
                                 aria-hidden
                               >
@@ -434,7 +521,7 @@ export default function Navbar({ mode = 'marketing' }: NavbarProps) {
                     <button
                       type="button"
                       onClick={openMobileAccount}
-                      className="flex w-full items-center gap-3 rounded-[16px] border border-line/70 bg-canvas/80 px-3.5 py-3 text-left shadow-[0_10px_30px_-20px_rgba(69,8,31,0.5)] backdrop-blur-sm transition-colors active:bg-periwinkle-tint/30"
+                      className="flex w-full items-center gap-3 rounded-card border border-line/70 bg-surface/80 px-3.5 py-3 text-left shadow-[0_10px_30px_-20px_rgba(69,8,31,0.5)] backdrop-blur-sm transition-colors active:bg-periwinkle-tint/30"
                     >
                       <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-periwinkle-tint text-[0.7rem] font-bold text-aubergine ring-1 ring-line">
                         {user?.avatarUrl ? (
@@ -445,9 +532,9 @@ export default function Navbar({ mode = 'marketing' }: NavbarProps) {
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-semibold text-aubergine">{user?.name}</span>
-                        <span className="block truncate text-xs text-ink-55">View account</span>
+                        <span className="block truncate text-xs text-muted">View account</span>
                       </span>
-                      <IconChevron className="shrink-0 text-ink-40" />
+                      <IconChevron className="shrink-0 text-muted" />
                     </button>
                   </div>
                 ) : (
@@ -462,7 +549,7 @@ export default function Navbar({ mode = 'marketing' }: NavbarProps) {
                     >
                       Sign in
                     </Link>
-                    <p className="pt-2 text-center font-sans text-[0.7rem] font-medium tracking-eyebrow text-ink-40">
+                    <p className="pt-2 text-center font-sans text-[0.7rem] font-medium tracking-eyebrow text-muted">
                       {site.domain}
                     </p>
                   </div>
@@ -473,11 +560,12 @@ export default function Navbar({ mode = 'marketing' }: NavbarProps) {
         )}
       </AnimatePresence>
 
-      {/* ── Mobile account sheet (GitHub-style) ─────────────────────────── */}
+      {/* â”€â”€ Mobile account sheet (GitHub-style) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <AnimatePresence>
         {mobileAccountOpen && isAuthenticated && (
           <MobileAccountOverlay
             reduced={!!reduced}
+            unreadNotifications={unreadNotifications}
             onClose={() => setMobileAccountOpen(false)}
           />
         )}
@@ -492,9 +580,11 @@ export default function Navbar({ mode = 'marketing' }: NavbarProps) {
  */
 function MobileAccountOverlay({
   reduced,
+  unreadNotifications,
   onClose,
 }: {
   reduced: boolean;
+  unreadNotifications: number;
   onClose: () => void;
 }) {
   const { user } = useAuth();
@@ -561,13 +651,13 @@ function MobileAccountOverlay({
             <span className="h-1 w-11 rounded-full bg-[rgba(69,8,31,0.12)]" aria-hidden />
           </div>
           <div className="flex w-full items-center justify-between pb-1">
-            <p className="font-sans text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-ink-40">
+            <p className="font-sans text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-muted">
               Account
             </p>
             <button
               type="button"
               onClick={onClose}
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-[rgba(69,8,31,0.05)] text-ink-55 transition-colors active:bg-periwinkle-tint/70 active:text-aubergine"
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-[rgba(69,8,31,0.05)] text-muted transition-colors active:bg-periwinkle-tint/70 active:text-aubergine"
               aria-label="Close"
             >
               <IconClose />
@@ -576,8 +666,8 @@ function MobileAccountOverlay({
         </div>
 
         <div className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-[max(1.4rem,env(safe-area-inset-bottom))]">
-          {/* Identity hero — soft fill, no hard border */}
-          <div className="mb-5 overflow-hidden rounded-[20px] bg-gradient-to-br from-periwinkle-tint/50 via-canvas to-[#FFF6EF]">
+          {/* Identity hero â€” soft fill, no hard border */}
+          <div className="mb-5 overflow-hidden rounded-card bg-gradient-to-br from-periwinkle-tint/50 via-canvas to-coral-tint/35">
             <div className="flex items-center gap-3.5 px-4 py-4">
               <span className="relative flex h-[3.25rem] w-[3.25rem] shrink-0 items-center justify-center overflow-hidden rounded-full bg-canvas text-sm font-bold text-aubergine shadow-[0_0_0_3px_rgba(228,230,251,0.8)]">
                 {user?.avatarUrl ? (
@@ -590,7 +680,7 @@ function MobileAccountOverlay({
                 <p className="truncate font-display text-[1.15rem] font-bold leading-tight tracking-[-0.025em] text-aubergine">
                   {user?.name}
                 </p>
-                <p className="mt-0.5 truncate text-[0.8rem] text-ink-55">@{user?.handle}</p>
+                <p className="mt-0.5 truncate text-[0.8rem] text-muted">@{user?.handle}</p>
               </div>
               {user ? (
                 <span className="shrink-0 rounded-full bg-canvas/80 px-2.5 py-1 font-sans text-[0.65rem] font-semibold uppercase tracking-[0.08em] text-aubergine/80">
@@ -600,12 +690,16 @@ function MobileAccountOverlay({
             </div>
             {user?.affiliation ? (
               <div className="border-t border-[rgba(69,8,31,0.06)] px-4 py-2.5">
-                <p className="truncate text-xs text-ink-55">{user.affiliation}</p>
+                <p className="truncate text-xs text-muted">{user.affiliation}</p>
               </div>
             ) : null}
           </div>
 
-          <MobileAccountSheet onNavigate={onClose} reduced={reduced} />
+          <MobileAccountSheet
+            onNavigate={onClose}
+            reduced={reduced}
+            unreadNotifications={unreadNotifications}
+          />
         </div>
       </motion.div>
     </motion.div>
@@ -621,14 +715,16 @@ type SheetItem = {
 };
 
 /**
- * Bottom-sheet account actions — icon chips + staggered reveal.
+ * Bottom-sheet account actions â€” icon chips + staggered reveal.
  */
 function MobileAccountSheet({
   onNavigate,
   reduced,
+  unreadNotifications,
 }: {
   onNavigate: () => void;
   reduced: boolean;
+  unreadNotifications: number;
 }) {
   const { user, viewer, logout } = useAuth();
   const toast = useToast();
@@ -637,7 +733,15 @@ function MobileAccountSheet({
   const primary: SheetItem[] = [
     { to: '/members', label: 'Find members', hint: 'Search the community', screen: 'members', icon: 'search' },
     { to: '/messages', label: 'Messages', hint: 'Inbox & replies', icon: 'mail' },
-    { to: '/notifications', label: 'Notifications', hint: 'Alerts & updates', icon: 'bell' },
+    {
+      to: '/notifications',
+      label: 'Notifications',
+      hint:
+        unreadNotifications > 0
+          ? `${unreadNotifications} unread`
+          : 'Alerts & updates',
+      icon: 'bell',
+    },
     ...(canAccess(viewer, 'upload')
       ? [
           {
@@ -703,11 +807,11 @@ function MobileAccountSheet({
   return (
     <div className="flex flex-col gap-5 pb-1">
       <section>
-        <p className="mb-2.5 px-0.5 font-sans text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-ink-40">
+        <p className="mb-2.5 px-0.5 font-sans text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-muted">
           Shortcuts
         </p>
         <motion.ul
-          className="overflow-hidden rounded-[18px] bg-[rgba(69,8,31,0.035)]"
+          className="overflow-hidden rounded-card bg-[rgba(69,8,31,0.035)]"
           variants={listMotion}
           initial={reduced ? undefined : 'hidden'}
           animate={reduced ? undefined : 'show'}
@@ -726,9 +830,9 @@ function MobileAccountSheet({
                 <SheetIcon kind={item.icon} />
                 <span className="min-w-0 flex-1">
                   <span className="block text-sm font-semibold text-aubergine">{item.label}</span>
-                  {item.hint ? <span className="mt-0.5 block text-xs text-ink-55">{item.hint}</span> : null}
+                  {item.hint ? <span className="mt-0.5 block text-xs text-muted">{item.hint}</span> : null}
                 </span>
-                <IconChevron className="shrink-0 text-ink-40 transition-transform duration-300 group-active:translate-x-0.5" />
+                <IconChevron className="shrink-0 text-muted transition-transform duration-300 group-active:translate-x-0.5" />
               </Link>
             </motion.li>
           ))}
@@ -736,11 +840,11 @@ function MobileAccountSheet({
       </section>
 
       <section>
-        <p className="mb-2.5 px-0.5 font-sans text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-ink-40">
+        <p className="mb-2.5 px-0.5 font-sans text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-muted">
           Settings
         </p>
         <motion.ul
-          className="overflow-hidden rounded-[18px] bg-[rgba(69,8,31,0.035)]"
+          className="overflow-hidden rounded-card bg-[rgba(69,8,31,0.035)]"
           variants={listMotion}
           initial={reduced ? undefined : 'hidden'}
           animate={reduced ? undefined : 'show'}
@@ -758,7 +862,7 @@ function MobileAccountSheet({
               >
                 <SheetIcon kind={item.icon} muted />
                 <span className="min-w-0 flex-1 text-sm font-medium text-aubergine">{item.label}</span>
-                <IconChevron className="shrink-0 text-ink-40 transition-transform duration-300 group-active:translate-x-0.5" />
+                <IconChevron className="shrink-0 text-muted transition-transform duration-300 group-active:translate-x-0.5" />
               </Link>
             </motion.li>
           ))}
@@ -768,7 +872,7 @@ function MobileAccountSheet({
       <button
         type="button"
         onClick={() => void handleSignOut()}
-        className="flex h-12 w-full items-center justify-center gap-2 rounded-[16px] bg-deep-coral/[0.08] text-sm font-semibold text-deep-coral transition-colors active:bg-deep-coral/[0.13]"
+        className="flex h-12 w-full items-center justify-center gap-2 rounded-card bg-deep-coral/[0.08] text-sm font-semibold text-deep-coral transition-colors active:bg-deep-coral/[0.13]"
       >
         Sign out
       </button>
@@ -786,10 +890,10 @@ function SheetIcon({
   return (
     <span
       className={cn(
-        'flex h-9 w-9 shrink-0 items-center justify-center rounded-[11px]',
+        'flex h-9 w-9 shrink-0 items-center justify-center rounded-card',
         muted
           ? 'bg-[rgba(69,8,31,0.05)] text-aubergine'
-          : 'bg-gradient-to-br from-periwinkle-tint to-[#d8dcf8] text-aubergine shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]',
+          : 'bg-gradient-to-br from-periwinkle-tint to-periwinkle/40 text-aubergine shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]',
       )}
     >
       {kind === 'search' && <IconSearch />}
@@ -808,7 +912,7 @@ function SheetIcon({
  * Account menu.
  *
  * Entries the signed-in role cannot open are hidden rather than shown and then
- * blocked — the same `canAccess` rule the route guards use, so the menu and the
+ * blocked â€” the same `canAccess` rule the route guards use, so the menu and the
  * router can never disagree.
  */
 function AccountLinks({ onNavigate }: { onNavigate: () => void }) {
@@ -817,7 +921,7 @@ function AccountLinks({ onNavigate }: { onNavigate: () => void }) {
   const navigate = useNavigate();
 
   // No Admin entry here on purpose: the console has its own entrance at
-  // /admin/login and staff sign in there — the community menu never offers
+  // /admin/login and staff sign in there â€” the community menu never offers
   // an admin route, whoever is signed in.
   const items: Array<{ to: string; label: string; screen?: ScreenKey }> = [
     { to: user ? `/u/${user.handle}` : '/login', label: 'Public profile' },
@@ -840,7 +944,7 @@ function AccountLinks({ onNavigate }: { onNavigate: () => void }) {
       );
     } catch {
       // logout() clears local state even if the revoke call fails, so the user
-      // is signed out either way — say so rather than showing a scary error.
+      // is signed out either way â€” say so rather than showing a scary error.
       toast.info('Signed out on this device');
     }
     navigate('/', { replace: true });
@@ -851,9 +955,9 @@ function AccountLinks({ onNavigate }: { onNavigate: () => void }) {
       {user ? (
         <div className="border-b border-line px-3.5 pb-2 pt-1">
           <p className="truncate text-sm font-semibold text-aubergine">{user.name}</p>
-          <p className="truncate text-xs text-ink-55">
+          <p className="truncate text-xs text-muted">
             {ROLE_LABEL[user.role]}
-            {user.affiliation ? ` · ${user.affiliation}` : ''}
+            {user.affiliation ? ` Â· ${user.affiliation}` : ''}
           </p>
         </div>
       ) : null}
@@ -864,7 +968,7 @@ function AccountLinks({ onNavigate }: { onNavigate: () => void }) {
             <Link
               to={item.to}
               onClick={onNavigate}
-              className="block px-3.5 py-2 text-sm font-medium text-ink-70 transition-colors hover:bg-periwinkle-tint/50 hover:text-aubergine"
+              className="block px-3.5 py-2 text-sm font-medium text-muted transition-colors hover:bg-periwinkle-tint/50 hover:text-aubergine"
             >
               {item.label}
             </Link>

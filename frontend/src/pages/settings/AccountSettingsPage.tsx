@@ -193,18 +193,18 @@ export default function AccountSettingsPage() {
           <h2 className="font-display text-lg font-bold text-aubergine">Sign-in details</h2>
           <dl className="mt-4 divide-y divide-line rounded-field border border-line">
             <div className="flex items-center justify-between gap-4 px-4 py-3">
-              <dt className="text-sm text-ink-55">Email</dt>
+              <dt className="text-sm text-muted">Email</dt>
               <dd className="text-sm font-semibold text-aubergine">{user.email}</dd>
             </div>
             <div className="flex items-center justify-between gap-4 px-4 py-3">
-              <dt className="text-sm text-ink-55">Status</dt>
+              <dt className="text-sm text-muted">Status</dt>
               <dd className="text-sm font-semibold text-aubergine">
                 {user.emailVerified ? 'Verified' : 'Awaiting verification'}
               </dd>
             </div>
           </dl>
           {!user.emailVerified ? (
-            <p className="mt-3 text-sm text-ink-70">
+            <p className="mt-3 text-sm text-muted">
               <Link
                 to="/verify-email"
                 state={{ email: user.email }}
@@ -273,7 +273,7 @@ export default function AccountSettingsPage() {
             <h2 className="font-display text-lg font-bold text-aubergine">Notifications &amp; privacy</h2>
             <span className="text-xs" aria-live="polite">
               {isSavingSettings ? (
-                <span className="text-ink-55">Saving…</span>
+                <span className="text-muted">Saving…</span>
               ) : justSaved ? (
                 <span className="inline-flex items-center gap-1 align-middle font-medium text-green">
                   <svg width="12" height="12" viewBox="0 0 20 20" fill="none" aria-hidden>
@@ -308,11 +308,11 @@ export default function AccountSettingsPage() {
                   />
                   <span>
                     <span className="block text-sm font-semibold text-aubergine">{preference.label}</span>
-                    <span className="block text-xs text-ink-55">{preference.hint}</span>
+                    <span className="block text-xs text-muted">{preference.hint}</span>
                   </span>
                 </label>
               ))}
-              <p className="text-xs text-ink-55">Changes save as you toggle them.</p>
+              <p className="text-xs text-muted">Changes save as you toggle them.</p>
             </div>
           )}
         </section>
@@ -320,7 +320,7 @@ export default function AccountSettingsPage() {
         {/* ── Deletion ─────────────────────────────────────────────────── */}
         <section className="border-t border-line pt-10">
           <h2 className="font-display text-lg font-bold text-deep-coral">Delete account</h2>
-          <p className="mt-2 text-sm leading-relaxed text-ink-70">
+          <p className="mt-2 text-sm leading-relaxed text-muted">
             Permanently remove your account and personal data. Published designs stay in the library with your
             identifiers removed, so citations in other people&rsquo;s work keep resolving.
           </p>

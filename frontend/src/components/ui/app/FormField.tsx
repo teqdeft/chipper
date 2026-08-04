@@ -15,14 +15,14 @@ export function FieldShell({ label, hint, error, children, className }: FieldShe
     <label className={cn('block', className)}>
       <span className="mb-1.5 block text-sm font-semibold text-aubergine">{label}</span>
       {children}
-      {hint && !error ? <span className="mt-1.5 block text-xs text-ink-55">{hint}</span> : null}
+      {hint && !error ? <span className="mt-1.5 block text-xs text-muted">{hint}</span> : null}
       {error ? <span className="mt-1.5 block text-xs font-medium text-deep-coral">{error}</span> : null}
     </label>
   );
 }
 
 const inputClass =
-  'w-full rounded-field border border-line bg-canvas px-3.5 py-2.5 text-sm text-aubergine outline-none transition-colors placeholder:text-ink-40 focus:border-line-strong focus:shadow-ring';
+  'w-full rounded-field border border-line-strong bg-canvas px-3.5 py-2.5 text-sm text-aubergine outline-none transition-colors placeholder:text-muted focus:shadow-ring';
 
 export function TextInput({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
   return <input className={cn(inputClass, className)} {...props} />;

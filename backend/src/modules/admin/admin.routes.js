@@ -48,6 +48,13 @@ router.patch(
   validate(validator.featureDesign),
   controller.featureDesign,
 );
+// Permanent and irreversible — admin-only, unlike the archive above.
+router.delete(
+  '/designs/:identifier',
+  can(PERMISSIONS.DESIGN_DELETE_ANY),
+  validate(validator.deleteDesign),
+  controller.deleteDesign,
+);
 
 // ── Moderation queue (SCR-035) ────────────────────────────────────────────
 router.get(
@@ -85,6 +92,7 @@ router.get(
 
 // ── News & pages (SCR-037) ────────────────────────────────────────────────
 router.get('/news', can(PERMISSIONS.CONTENT_MANAGE), controller.listNews);
+router.get('/news/:slug', can(PERMISSIONS.CONTENT_MANAGE), controller.getNews);
 router.post(
   '/news',
   can(PERMISSIONS.CONTENT_MANAGE),

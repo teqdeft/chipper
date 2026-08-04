@@ -35,7 +35,7 @@ export default function Platform() {
                 <span className={cn('h-2.5 w-2.5 rounded-full', accentDot[f.accent])} />
               </span>
               <h3 className="font-display text-xl font-bold text-aubergine">{f.title}</h3>
-              <p className="text-[0.95rem] leading-relaxed text-ink-70">{f.body}</p>
+              <p className="text-[0.95rem] leading-relaxed text-muted">{f.body}</p>
             </article>
           </motion.div>
         ))}

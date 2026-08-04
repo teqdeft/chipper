@@ -11,7 +11,7 @@ export function LoadingState({ label = 'Loading…', className }: { label?: stri
       aria-live="polite"
     >
       <span className="h-8 w-8 animate-spin rounded-full border-2 border-line border-t-coral" aria-hidden />
-      <p className="text-sm text-ink-70">{label}</p>
+      <p className="text-sm text-muted">{label}</p>
     </div>
   );
 }
@@ -38,7 +38,7 @@ export function ErrorState({
     <div className={className}>
       <EmptyState title={error.title} body={error.message}>
         {error.retryable && onRetry ? (
-          <button type="button" onClick={onRetry} className="btn-primary mt-6 inline-flex">
+          <button type="button" onClick={onRetry} className="btn-primary mt-6 w-full sm:w-auto">
             Try again
           </button>
         ) : null}

@@ -58,6 +58,8 @@ export function mockToListItem(design: MockDesign): BrowseItem {
     summary: design.summary,
     status: design.status,
     version: design.version,
+    // Demo rows ship no stored media, so the card falls back to its drawing.
+    coverImageUrl: null,
     componentType: slugToRef(COMPONENT_TYPES, design.componentType),
     resourceType: slugToRef(RESOURCE_TYPES, design.resourceType),
     organs: design.organs,
@@ -70,6 +72,7 @@ export function mockToListItem(design: MockDesign): BrowseItem {
     author: design.author,
     authorHandle: design.authorHandle,
     authorAffiliation: design.authorAffiliation,
+    authorAvatarUrl: null,
     publishAs: design.publishAs,
     instituteName: design.instituteName ?? null,
     downloads: design.downloads,
@@ -186,6 +189,7 @@ export function mockToDetail(design: MockDesign): DetailItem {
       avatarUrl: null,
     },
     authorName: design.author,
+    coverImages: [],
     currentVersion: mockToVersion(design),
     versions: [
       {

@@ -200,7 +200,7 @@ function ToastCard({ toast, onDismiss }: { toast: Toast; onDismiss: (id: string)
       onMouseLeave={() => setPaused(false)}
       onFocusCapture={() => setPaused(true)}
       onBlurCapture={() => setPaused(false)}
-      className="pointer-events-auto relative w-full max-w-[380px] overflow-hidden rounded-[14px]"
+      className="pointer-events-auto relative w-full max-w-[380px] overflow-hidden rounded-card"
       style={{
         background:
           'linear-gradient(165deg, rgba(69, 8, 31, 0.97) 0%, rgba(52, 6, 24, 0.98) 100%)',
@@ -267,7 +267,7 @@ function ToastCard({ toast, onDismiss }: { toast: Toast; onDismiss: (id: string)
           type="button"
           onClick={() => onDismiss(toast.id)}
           aria-label="Dismiss notification"
-          className="-mr-1 -mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-canvas/40 transition-colors hover:bg-canvas/[0.08] hover:text-canvas/85"
+          className="-mr-1 -mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-btn text-canvas/40 transition-colors hover:bg-canvas/[0.08] hover:text-canvas/85"
         >
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden>
             <path d="m2.5 2.5 7 7m0-7-7 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />

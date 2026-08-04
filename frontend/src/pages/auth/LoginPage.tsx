@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { FieldShell, TextInput } from '@/components/ui/app/FormField';
 import { PasswordInput } from '@/components/ui/app/PasswordInput';
 import { FormAlert, SubmitButton } from '@/components/ui/app/FormAlert';
+import { PageHeader } from '@/components/ui/app/PageHeader';
 import { Reveal } from '@/components/ui/Reveal';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { useToast } from '@/app/providers/ToastProvider';
@@ -100,15 +101,11 @@ export default function LoginPage() {
 
   return (
     <div>
-      <Reveal>
-        <p className="eyebrow text-deep-coral">Welcome back</p>
-        <h1 className="mt-2 font-display text-display-sm font-extrabold tracking-tight text-aubergine">
-          Sign in to Chipper
-        </h1>
-        <p className="mt-2 text-sm leading-relaxed text-ink-70">
-          Access your designs, messages and upload dashboard.
-        </p>
-      </Reveal>
+      <PageHeader
+        eyebrow="Welcome back"
+        title="Sign in to Chipper"
+        lede="Access your designs, messages and upload dashboard."
+      />
 
       <Reveal delay={0.1}>
         <form className="mt-8 space-y-5" onSubmit={handleSubmit} noValidate>
@@ -124,7 +121,7 @@ export default function LoginPage() {
           ) : null}
 
           {staffBlocked ? (
-            <p className="text-sm text-ink-70">
+            <p className="text-sm text-muted">
               <Link
                 to="/admin/login"
                 state={{ email: form.email }}
@@ -136,7 +133,7 @@ export default function LoginPage() {
           ) : null}
 
           {needsVerification ? (
-            <p className="text-sm text-ink-70">
+            <p className="text-sm text-muted">
               Not confirmed yet?{' '}
               <Link
                 to="/verify-email"
@@ -171,7 +168,7 @@ export default function LoginPage() {
           </FieldShell>
 
           <div className="flex items-center justify-between gap-4">
-            <label className="flex cursor-pointer items-center gap-2 text-sm text-ink-70">
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-muted">
               <input
                 type="checkbox"
                 checked={remember}
@@ -192,7 +189,7 @@ export default function LoginPage() {
       </Reveal>
 
       <Reveal delay={0.15}>
-        <p className="mt-6 text-center text-sm text-ink-70">
+        <p className="mt-6 text-center text-sm text-muted">
           No account yet?{' '}
           <Link to="/register" className="font-semibold text-deep-coral hover:underline">
             Create one

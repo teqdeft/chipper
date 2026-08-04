@@ -16,7 +16,7 @@ type AvatarProps = {
  * a redeploy on an ephemeral filesystem — renders as the browser's broken-image
  * box, which reads as a grey square next to everyone else's neat circle.
  *
- * Always circular: a mix of circles and rounded squares in one list looks like a
+ * Always circular: a mix of circles and squircles in one list looks like a
  * rendering fault rather than a distinction.
  */
 export function Avatar({ name, src, className }: AvatarProps) {

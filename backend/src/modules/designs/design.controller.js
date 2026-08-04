@@ -5,6 +5,7 @@ const ApiError = require('../../utils/ApiError');
 const designService = require('./design.service');
 const designRepository = require('./design.repository');
 const serializer = require('./design.serializer');
+const { VIEWABLE_MODEL_EXTENSIONS } = require('../../config/constants');
 
 const contextOf = (req) => ({
   ip: req.ip,
@@ -64,15 +65,17 @@ module.exports = {
     if (!version) throw ApiError.notFound('Version not found');
 
     const files = await designRepository.listFiles(version.id);
-    const viewable = files.filter((f) => ['stl', '3mf', 'obj'].includes((f.extension || '').toLowerCase()));
+    // Formats the browser can render today; the rest are download-only.
+    const viewable = files.filter((f) =>
+      VIEWABLE_MODEL_EXTENSIONS.includes((f.extension || '').toLowerCase()),
+    );
 
     return ApiResponse.success(res, {
       data: {
         design: { id: design.uuid, title: design.title, version: version.version },
-        // Formats the browser can render today; the rest are download-only.
         viewableFiles: viewable.map(serializer.toFile),
         allFiles: files.map(serializer.toFile),
-        supportedFormats: ['stl', '3mf', 'obj'],
+        supportedFormats: [...VIEWABLE_MODEL_EXTENSIONS],
       },
       message: 'Viewer payload',
     });

@@ -15,6 +15,12 @@ const P = Object.freeze({
   DESIGN_PUBLISH: 'design.publish',
   DESIGN_DOWNLOAD: 'design.download',
   DESIGN_MODERATE: 'design.moderate',
+  /**
+   * Permanent removal of anyone's design, files and all. Deliberately kept out
+   * of DESIGN_MODERATE: a moderator archives, which is reversible; only an
+   * admin destroys.
+   */
+  DESIGN_DELETE_ANY: 'design.delete.any',
 
   // Comments / community content
   COMMENT_CREATE: 'comment.create',
@@ -85,6 +91,7 @@ const MODERATOR_PERMISSIONS = [
 
 const ADMIN_PERMISSIONS = [
   ...MODERATOR_PERMISSIONS,
+  P.DESIGN_DELETE_ANY,
   P.LISTING_MANAGE,
   P.FORUM_MANAGE,
   P.USER_MANAGE,

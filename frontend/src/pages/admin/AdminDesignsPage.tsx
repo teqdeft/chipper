@@ -7,6 +7,7 @@ import { TextInput, TextSelect } from '@/components/ui/app/FormField';
 import { ErrorState, LoadingState } from '@/components/ui/app/LoadingState';
 import { Pagination } from '@/components/ui/app/Pagination';
 import { useApiResource } from '@/hooks/useApiResource';
+import { useAuth } from '@/app/providers/AuthProvider';
 import { useToast } from '@/app/providers/ToastProvider';
 import { adminApi } from '@/lib/api/admin';
 import type { AdminDesign, DesignReviewAction } from '@/lib/api/admin';
@@ -30,6 +31,9 @@ const STATUS_AFTER: Record<DesignReviewAction, AdminDesign['status']> = {
 /** SCR-034 — Manage designs (CHIP-037). */
 export default function AdminDesignsPage() {
   const toast = useToast();
+  const { hasPermission } = useAuth();
+  // Moderators archive; only an admin holds the irreversible one.
+  const canDelete = hasPermission('design.delete.any');
 
   const [search, setSearch] = useState('');
   const [submittedSearch, setSubmittedSearch] = useState('');
@@ -83,6 +87,37 @@ export default function AdminDesignsPage() {
     }
   }
 
+  /**
+   * Irreversible, so it asks twice: once to acknowledge what goes, once for the
+   * reason the uploader is sent. Reloads rather than patching local state — a
+   * removed row changes the page's totals, not just its contents.
+   */
+  async function destroy(row: AdminDesign) {
+    const confirmed = window.confirm(
+      `Permanently delete "${row.title}"?\n\n` +
+        'Every version, file, comment and star goes with it, and the uploaded files are ' +
+        'removed from disk. This cannot be undone — use Archive if you only want it hidden.',
+    );
+    if (!confirmed) return;
+
+    const answer = window.prompt('Reason for the uploader (optional):');
+    if (answer === null) return; // cancelled
+
+    setBusyId(row.id);
+    try {
+      const result = await adminApi.deleteDesign(row.slug, answer || undefined);
+      toast.success(
+        'Design deleted',
+        `${result.title} and ${result.files} ${result.files === 1 ? 'file' : 'files'} were removed.`,
+      );
+      reload();
+    } catch (err) {
+      toast.fromError(err);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   async function toggleFeatured(row: AdminDesign) {
     setBusyId(row.id);
     try {
@@ -106,7 +141,7 @@ export default function AdminDesignsPage() {
       <PageHeader
         eyebrow="Administration"
         title="Designs"
-        lede="Review pending uploads, publish approved work and archive outdated versions."
+        lede="Review pending uploads, publish approved work, archive outdated versions — or delete one outright."
         actions={
           pendingCount > 0 ? <StatusBadge tone="yellow">{pendingCount} pending on this page</StatusBadge> : null
         }
@@ -164,7 +199,7 @@ export default function AdminDesignsPage() {
                     <Link to={`/designs/${row.slug}`} className="font-semibold hover:text-deep-coral">
                       {row.title}
                     </Link>
-                    <p className="text-xs text-ink-55">
+                    <p className="text-xs text-muted">
                       {[row.componentType, row.license].filter(Boolean).join(' · ') || '—'}
                       {row.featured ? ' · ★ featured' : ''}
                     </p>
@@ -175,7 +210,7 @@ export default function AdminDesignsPage() {
                 key: 'author',
                 header: 'Author',
                 render: (row) => (
-                  <Link to={`/u/${row.authorHandle}`} className="text-ink-70 hover:text-deep-coral">
+                  <Link to={`/u/${row.authorHandle}`} className="text-muted hover:text-deep-coral">
                     {row.author}
                   </Link>
                 ),
@@ -213,7 +248,7 @@ export default function AdminDesignsPage() {
                           <button
                             type="button"
                             disabled={busy}
-                            className="rounded-field border border-green/40 bg-green/10 px-2 py-1 text-[0.7rem] font-semibold text-[#0f7a52] hover:bg-green/20 disabled:opacity-40"
+                            className="rounded-field border border-green/40 bg-green/10 px-2 py-1 text-[0.7rem] font-semibold text-published-green hover:bg-green/20 disabled:opacity-40"
                             onClick={() => void review(row, 'approve')}
                           >
                             Approve
@@ -234,7 +269,7 @@ export default function AdminDesignsPage() {
                           <button
                             type="button"
                             disabled={busy}
-                            className="rounded-field border border-line px-2 py-1 text-[0.7rem] font-semibold text-ink-70 hover:bg-periwinkle-tint/50 disabled:opacity-40"
+                            className="rounded-field border border-line px-2 py-1 text-[0.7rem] font-semibold text-muted hover:bg-periwinkle-tint/50 disabled:opacity-40"
                             onClick={() => void toggleFeatured(row)}
                           >
                             {row.featured ? 'Unfeature' : 'Feature'}
@@ -242,7 +277,7 @@ export default function AdminDesignsPage() {
                           <button
                             type="button"
                             disabled={busy}
-                            className="rounded-field border border-line px-2 py-1 text-[0.7rem] font-semibold text-ink-70 hover:bg-periwinkle-tint/50 disabled:opacity-40"
+                            className="rounded-field border border-line px-2 py-1 text-[0.7rem] font-semibold text-muted hover:bg-periwinkle-tint/50 disabled:opacity-40"
                             onClick={() => void review(row, 'archive')}
                           >
                             Archive
@@ -254,10 +289,22 @@ export default function AdminDesignsPage() {
                         <button
                           type="button"
                           disabled={busy}
-                          className="rounded-field border border-line px-2 py-1 text-[0.7rem] font-semibold text-ink-70 hover:bg-periwinkle-tint/50 disabled:opacity-40"
+                          className="rounded-field border border-line px-2 py-1 text-[0.7rem] font-semibold text-muted hover:bg-periwinkle-tint/50 disabled:opacity-40"
                           onClick={() => void review(row, 'restore')}
                         >
                           Restore
+                        </button>
+                      ) : null}
+
+                      {canDelete ? (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          title="Permanently deletes the design and its files — archive instead to keep them"
+                          className="rounded-field border border-deep-coral bg-deep-coral/10 px-2 py-1 text-[0.7rem] font-semibold text-deep-coral hover:bg-deep-coral hover:text-canvas disabled:opacity-40"
+                          onClick={() => void destroy(row)}
+                        >
+                          Delete
                         </button>
                       ) : null}
                     </div>

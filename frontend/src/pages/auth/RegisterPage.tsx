@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { FieldShell, TextInput, TextSelect } from '@/components/ui/app/FormField';
 import { PasswordInput } from '@/components/ui/app/PasswordInput';
 import { FormAlert, SubmitButton } from '@/components/ui/app/FormAlert';
+import { PageHeader } from '@/components/ui/app/PageHeader';
 import { Reveal } from '@/components/ui/Reveal';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { useToast } from '@/app/providers/ToastProvider';
@@ -100,15 +101,11 @@ export default function RegisterPage() {
 
   return (
     <div>
-      <Reveal>
-        <p className="eyebrow text-deep-coral">Get started</p>
-        <h1 className="mt-2 font-display text-display-sm font-extrabold tracking-tight text-aubergine">
-          Create your account
-        </h1>
-        <p className="mt-2 text-sm leading-relaxed text-ink-70">
-          Join the Playground to upload designs, download files and participate in the forum.
-        </p>
-      </Reveal>
+      <PageHeader
+        eyebrow="Get started"
+        title="Create your account"
+        lede="Join the Playground to upload designs, download files and participate in the forum."
+      />
 
       <Reveal delay={0.1}>
         <form className="mt-8 space-y-5" onSubmit={handleSubmit} noValidate>
@@ -208,7 +205,7 @@ export default function RegisterPage() {
             />
           </FieldShell>
 
-          <label className="flex cursor-pointer items-start gap-3 text-sm text-ink-70">
+          <label className="flex cursor-pointer items-start gap-3 text-sm text-muted">
             <input
               type="checkbox"
               checked={acceptTerms}
@@ -229,7 +226,7 @@ export default function RegisterPage() {
             </span>
           </label>
 
-          <label className="flex cursor-pointer items-start gap-3 text-sm text-ink-70">
+          <label className="flex cursor-pointer items-start gap-3 text-sm text-muted">
             <input
               type="checkbox"
               checked={newsletter}
@@ -246,7 +243,7 @@ export default function RegisterPage() {
       </Reveal>
 
       <Reveal delay={0.15}>
-        <p className="mt-6 text-center text-sm text-ink-70">
+        <p className="mt-6 text-center text-sm text-muted">
           Already have an account?{' '}
           <Link to="/login" className="font-semibold text-deep-coral hover:underline">
             Sign in

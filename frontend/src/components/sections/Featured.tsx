@@ -10,7 +10,7 @@ function ChannelDiagram() {
     <svg viewBox="0 0 400 320" className="h-full w-full" role="img" aria-label="Two-channel alveolar barrier microfluidic layout">
       <defs>
         <linearGradient id="feat-bg" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#FFF3EC" />
+          <stop offset="0" stopColor="#FFE7DE" />
           <stop offset="1" stopColor="#E4E6FB" />
         </linearGradient>
       </defs>
@@ -108,7 +108,7 @@ export default function Featured() {
                 >
                   B
                 </span>
-                <p className="text-sm text-ink-70">
+                <p className="text-sm text-muted">
                   by <span className="font-semibold text-aubergine">{featured.maker}</span>,{' '}
                   {featured.affiliation}
                   {featured.verified && (
@@ -138,11 +138,11 @@ export default function Featured() {
                 <span className="pill bg-periwinkle-tint text-deep-periwinkle">{featured.version}</span>
               </div>
 
-              <p className="mt-3 max-w-md text-base leading-relaxed text-ink-70 sm:mt-4 sm:text-[1.05rem]">
+              <p className="mt-3 max-w-md text-base leading-relaxed text-muted sm:mt-4 sm:text-[1.05rem]">
                 {featured.summary}
               </p>
 
-              <div className="mt-5 flex items-center gap-5 text-sm text-ink-55 sm:mt-6">
+              <div className="mt-5 flex items-center gap-5 text-sm text-muted sm:mt-6">
                 <span className="inline-flex items-center gap-1.5">
                   <span className="text-coral">★</span> {featured.stars}
                 </span>
@@ -152,7 +152,7 @@ export default function Featured() {
               <dl className="mt-6 grid grid-cols-2 gap-x-4 gap-y-4 border-t border-line pt-5 sm:mt-8 sm:gap-x-6 sm:gap-y-5 sm:grid-cols-3 sm:pt-7">
                 {featured.specs.map((s) => (
                   <div key={s.k} className="flex flex-col gap-1">
-                    <dt className="eyebrow text-ink-40">{s.k}</dt>
+                    <dt className="eyebrow text-muted">{s.k}</dt>
                     <dd className="data-unit text-[0.9rem] sm:text-[0.95rem]">{s.v}</dd>
                   </div>
                 ))}

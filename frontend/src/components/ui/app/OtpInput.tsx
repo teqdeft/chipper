@@ -93,7 +93,7 @@ export function OtpInput({
           onChange={(e) => handleChange(index, e.target.value)}
           onKeyDown={(e) => handleKeyDown(index, e)}
           onFocus={(e) => e.target.select()}
-          className="h-12 w-full min-w-0 rounded-[12px] border border-line bg-canvas text-center font-display text-lg font-bold text-aubergine outline-none transition-[border-color,box-shadow,background-color] placeholder:text-ink-40 focus:border-line-strong focus:bg-coral/10 focus:shadow-ring disabled:opacity-60 sm:h-14 sm:rounded-field sm:text-xl"
+          className="h-12 w-full min-w-0 rounded-field border border-line-strong bg-canvas text-center font-display text-lg font-bold text-aubergine outline-none transition-[border-color,box-shadow,background-color] placeholder:text-muted focus:bg-coral/10 focus:shadow-ring disabled:opacity-60 sm:h-14 sm:text-xl"
         />
       ))}
     </div>

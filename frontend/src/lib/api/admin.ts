@@ -121,11 +121,13 @@ export type AdminArticle = {
   slug: string;
   title: string;
   excerpt: string | null;
-  bodyRaw?: string;
+  body?: string[];
+  bodyRaw?: string | null;
   category: string | null;
   status: 'draft' | 'published' | 'archived';
   featured: boolean;
   views: number;
+  date?: string | null;
   publishedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -138,6 +140,7 @@ export type ArticlePayload = {
   category?: string | null;
   status?: 'draft' | 'published' | 'archived';
   featured?: boolean;
+  publishedAt?: string | null;
 };
 
 // ── Forum (SCR-038) ────────────────────────────────────────────────────────
@@ -189,6 +192,18 @@ export const adminApi = {
   featureDesign: (identifier: string, featured: boolean) =>
     api.patch<{ featured: boolean }>(`/admin/designs/${identifier}/feature`, { featured }).then((r) => r.data),
 
+  /**
+   * Permanent — versions, files, comments and stored bytes all go. Archiving
+   * (`reviewDesign(..., 'archive')`) is the reversible option. Admin-only.
+   */
+  deleteDesign: (identifier: string, note?: string) =>
+    api
+      .delete<{ deleted: boolean; slug: string; title: string; files: number }>(
+        `/admin/designs/${encodeURIComponent(identifier)}`,
+        { note },
+      )
+      .then((r) => r.data),
+
   // ── Moderation ───────────────────────────────────────────────────────────
   reports: (filters: { page?: number; limit?: number; status?: string } = {}) =>
     paged<AdminReport>(`/admin/moderation/reports${toQuery(filters)}`) as Promise<
@@ -215,6 +230,11 @@ export const adminApi = {
   // ── News ─────────────────────────────────────────────────────────────────
   news: (filters: { page?: number; limit?: number; status?: string } = {}) =>
     paged<AdminArticle>(`/admin/news${toQuery(filters)}`),
+
+  getArticle: (slug: string) =>
+    api
+      .get<{ article: AdminArticle }>(`/admin/news/${encodeURIComponent(slug)}`)
+      .then((r) => r.data.article),
 
   createArticle: (payload: ArticlePayload) =>
     api.post<{ article: AdminArticle }>('/admin/news', payload).then((r) => r.data.article),

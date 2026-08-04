@@ -58,13 +58,13 @@ export default function Library() {
 
               <div className="relative flex items-start justify-between gap-4">
                 <div>
-                  <span className="pill mb-3 text-ink-70 sm:mb-4">{c.type}</span>
+                  <span className="pill mb-3 text-muted sm:mb-4">{c.type}</span>
                   <h3 className="font-display text-xl font-bold text-aubergine transition-colors duration-300 group-hover:text-deep-coral sm:text-2xl">
                     {c.name}
                   </h3>
                 </div>
               </div>
-              <p className="relative mt-3 max-w-sm text-[0.95rem] leading-relaxed text-ink-70">
+              <p className="relative mt-3 max-w-sm text-[0.95rem] leading-relaxed text-muted">
                 {c.blurb}
               </p>
 
@@ -78,7 +78,7 @@ export default function Library() {
                     viewport={{ once: true }}
                     transition={{ duration: 0.45, delay: 0.2 + i * 0.06, ease: premiumEase }}
                   >
-                    <dt className="eyebrow text-ink-40">{s.k}</dt>
+                    <dt className="eyebrow text-muted">{s.k}</dt>
                     <dd className="data-unit text-[0.85rem] sm:text-[0.95rem]">{s.v}</dd>
                   </motion.div>
                 ))}

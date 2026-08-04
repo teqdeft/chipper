@@ -9,23 +9,40 @@ import { ErrorState, LoadingState } from '@/components/ui/app/LoadingState';
 import { Reveal } from '@/components/ui/Reveal';
 import { useApiResource } from '@/hooks/useApiResource';
 import { useToast } from '@/app/providers/ToastProvider';
-import { designApi, taxonomyApi } from '@/lib/api/designs';
+import {
+  designApi,
+  taxonomyApi,
+  acceptAttribute,
+  extensionOf,
+  COVER_EXTENSIONS,
+  MAX_COVER_IMAGES,
+} from '@/lib/api/designs';
 import type { DesignDetail, DesignUpdatePayload, Taxonomies } from '@/lib/api/designs';
 import { ApiError } from '@/lib/api/client';
+
+const COVER_ACCEPT_ATTRIBUTE = acceptAttribute(COVER_EXTENSIONS);
 
 /**
  * SCR-023 — edit metadata.
  *
- * Editing a published design creates a new draft version server-side, so the
+ * Editing a published design branches a new draft version server-side, so the
  * live one keeps its downloads and numbers; editing a draft edits it in place.
- * The banner tells the user which of the two is about to happen.
+ * Save again and the same draft is reused rather than stacking another version.
+ * The banner tells the user which of the three is about to happen.
+ *
+ * Because edits land on that draft, so must the cover upload — `editingVersion`
+ * below is the version this screen is actually working on, which is not always
+ * the one the design points at.
  */
 export default function EditDesignPage() {
   const { id = '' } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const toast = useToast();
 
-  const design = useApiResource<DesignDetail>(() => designApi.detail(id), [id], {
+  /** Set once a queued draft is discovered, to re-read the design at it. */
+  const [versionLabel, setVersionLabel] = useState<string | undefined>(undefined);
+
+  const design = useApiResource<DesignDetail>(() => designApi.detail(id, versionLabel), [id, versionLabel], {
     enabled: Boolean(id),
   });
   const taxonomies = useApiResource<Taxonomies>(() => taxonomyApi.all(), []);
@@ -47,16 +64,44 @@ export default function EditDesignPage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [uploadingCovers, setUploadingCovers] = useState(false);
+  const coverInputRef = useRef<HTMLInputElement>(null);
 
-  /** Seeds the form once, so typing is not overwritten by a background reload. */
-  const seeded = useRef(false);
+  /**
+   * The version this screen edits: a draft already queued behind the live one
+   * if there is one, else whatever the design currently points at. The API's
+   * update picks the same target, so the two cannot disagree.
+   */
+  const queuedDraft = useMemo(() => {
+    const data = design.data;
+    if (!data) return null;
+    return (
+      data.versions.find(
+        (version) => version.status === 'draft' && version.id !== data.currentVersion?.id,
+      ) ?? null
+    );
+  }, [design.data]);
+
+  // Re-read at the draft so the form and the cover list show *its* contents
+  // rather than the live version's.
+  useEffect(() => {
+    if (!versionLabel && queuedDraft) setVersionLabel(queuedDraft.version);
+  }, [queuedDraft, versionLabel]);
+
+  const editingVersion = design.data?.currentVersion ?? null;
+
+  /**
+   * Seeds the form once per version, so typing is not overwritten by a
+   * background reload — but the switch to a queued draft does reseed.
+   */
+  const seededVersionId = useRef<number | null>(null);
 
   useEffect(() => {
     const data = design.data;
-    if (!data || seeded.current) return;
-    seeded.current = true;
+    const version = data?.currentVersion;
+    if (!data || !version || seededVersionId.current === version.id) return;
+    seededVersionId.current = version.id;
 
-    const version = data.currentVersion;
     setForm({
       title: data.title ?? '',
       summary: data.summary ?? '',
@@ -74,6 +119,49 @@ export default function EditDesignPage() {
   }, [design.data]);
 
   const isPublished = design.data?.status === 'published';
+
+  const currentCovers = useMemo(
+    () => (editingVersion?.files ?? []).filter((file) => file.isCover && file.kind === 'image' && file.url),
+    [editingVersion],
+  );
+
+  /**
+   * Replaces the version's whole cover set in one upload — the API clears the
+   * previous covers when a request nominates new ones, so this cannot drift
+   * past the three the design page shows.
+   */
+  async function replaceCovers(incoming: FileList | null) {
+    if (!incoming?.length) return;
+
+    const picked: File[] = [];
+    const skipped: string[] = [];
+    for (const file of Array.from(incoming)) {
+      if (!COVER_EXTENSIONS.includes(extensionOf(file.name))) skipped.push(file.name);
+      else picked.push(file);
+    }
+
+    if (skipped.length) {
+      toast.warning('Some images were skipped', `${skipped.join(', ')} — use JPG, PNG or WebP.`);
+    }
+    if (!picked.length) return;
+
+    setUploadingCovers(true);
+    try {
+      const covers = picked.slice(0, MAX_COVER_IMAGES);
+      await designApi.addFiles(id, covers, {
+        // Explicit: without it the API falls back to the design's current
+        // version, which is the *live* one whenever a draft is queued.
+        versionId: editingVersion?.id,
+        coverIndexes: covers.map((_, index) => index),
+      });
+      toast.success('Covers updated', 'They are what people see on browse cards.');
+      design.reload();
+    } catch (error) {
+      toast.fromError(error);
+    } finally {
+      setUploadingCovers(false);
+    }
+  }
 
   function update(key: keyof typeof form, value: string) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -131,7 +219,14 @@ export default function EditDesignPage() {
 
     try {
       await designApi.update(id, payload);
-      toast.success('Saved', isPublished ? 'A new draft version was created.' : 'Your changes are saved.');
+      toast.success(
+        'Saved',
+        queuedDraft
+          ? `Saved to the ${queuedDraft.version} draft. Submit it from My designs when you are ready.`
+          : isPublished
+            ? 'Saved to a new draft version — the live version is unchanged.'
+            : 'Your changes are saved.',
+      );
       navigate('/my-designs');
     } catch (error) {
       if (error instanceof ApiError) {
@@ -189,7 +284,7 @@ export default function EditDesignPage() {
     <div className="container-content max-w-2xl space-y-8">
       <Reveal>
         <div className="flex flex-wrap items-center gap-2 text-sm">
-          <Link to="/my-designs" className="font-medium text-ink-70 hover:text-deep-coral">
+          <Link to="/my-designs" className="font-medium text-muted hover:text-deep-coral">
             ← My designs
           </Link>
         </div>
@@ -198,18 +293,32 @@ export default function EditDesignPage() {
       <PageHeader
         eyebrow="SCR-023 · Edit design"
         title="Edit design"
-        lede={`Update version-tracked metadata for "${data.title}".`}
+        lede={
+          queuedDraft
+            ? `Editing the ${queuedDraft.version} draft of "${data.title}".`
+            : `Update version-tracked metadata for "${data.title}".`
+        }
         actions={
-          <StatusBadge tone={data.status === 'published' ? 'green' : 'ink'}>{data.status}</StatusBadge>
+          <StatusBadge tone={data.status === 'published' ? 'green' : 'ink'}>
+            {queuedDraft ? `${queuedDraft.version} draft` : data.status}
+          </StatusBadge>
         }
       />
 
-      {isPublished ? (
+      {queuedDraft ? (
+        <Reveal delay={0.04}>
+          <FormAlert
+            tone="info"
+            title={`Editing your unpublished ${queuedDraft.version}`}
+            message="Changes and cover uploads go to this draft, not to the live version. Submit it from My designs when it is ready."
+          />
+        </Reveal>
+      ) : isPublished ? (
         <Reveal delay={0.04}>
           <FormAlert
             tone="info"
             title="This design is live"
-            message="Saving creates a new draft version. The published version keeps its files and download count until you publish the new one."
+            message="Saving branches a new draft version. The published version keeps its files and download count until the new one is approved."
           />
         </Reveal>
       ) : null}
@@ -224,6 +333,64 @@ export default function EditDesignPage() {
           />
         </Reveal>
       ) : null}
+
+      <Reveal delay={0.06}>
+        <section className="card space-y-4 p-5 sm:p-8">
+          <div>
+            <h2 className="font-display text-lg font-bold text-aubergine">Cover images</h2>
+            <p className="mt-1 text-sm text-muted">
+              Up to {MAX_COVER_IMAGES}. The first is the thumbnail on browse cards; all of them sit
+              beside the 3D preview on the design page. A design needs at least one to be published.
+            </p>
+          </div>
+
+          {currentCovers.length > 0 ? (
+            <ul className="grid grid-cols-3 gap-3">
+              {currentCovers.map((file, index) => (
+                <li key={file.id} className="relative overflow-hidden rounded-field border border-line">
+                  <img src={file.url ?? ''} alt={file.name} className="aspect-square w-full object-cover" />
+                  {index === 0 ? (
+                    <span className="absolute left-1.5 top-1.5 rounded-pill bg-canvas/90 px-2 py-0.5 text-[0.62rem] font-bold uppercase tracking-wider text-deep-periwinkle">
+                      Thumbnail
+                    </span>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="rounded-field border border-dashed border-line-strong bg-periwinkle-tint/20 px-4 py-6 text-center text-sm text-muted">
+              No cover images yet — this design cannot be published without one.
+            </p>
+          )}
+
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              className="btn-ghost"
+              onClick={() => coverInputRef.current?.click()}
+              disabled={uploadingCovers}
+            >
+              {uploadingCovers
+                ? 'Uploading…'
+                : currentCovers.length
+                  ? 'Replace covers'
+                  : 'Add cover images'}
+            </button>
+            <span className="text-xs text-muted">JPG, PNG or WebP. Uploading replaces the set.</span>
+            <input
+              ref={coverInputRef}
+              type="file"
+              className="sr-only"
+              multiple
+              accept={COVER_ACCEPT_ATTRIBUTE}
+              onChange={(e) => {
+                replaceCovers(e.target.files);
+                e.target.value = '';
+              }}
+            />
+          </div>
+        </section>
+      </Reveal>
 
       <Reveal delay={0.08}>
         <form onSubmit={handleSave} className="card space-y-5 p-5 sm:p-8" noValidate>
@@ -337,7 +504,7 @@ export default function EditDesignPage() {
             />
           </FieldShell>
 
-          <div className="flex flex-wrap gap-3 border-t border-line pt-6">
+          <div className="flex flex-col gap-3 border-t border-line pt-6 sm:flex-row sm:flex-wrap">
             <button type="submit" className="btn-primary" disabled={saving}>
               {saving ? 'Saving…' : 'Save changes'}
             </button>

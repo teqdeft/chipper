@@ -72,6 +72,13 @@ const FILE_KIND = Object.freeze({
   OTHER: 'other',
 });
 
+/**
+ * Cover images per design version: shown beside the 3D model on the design
+ * page, and the first is the thumbnail on every browse card. Capped so the
+ * media panel stays one hero plus a single row of thumbnails.
+ */
+const MAX_COVER_IMAGES = 3;
+
 const COMMENT_STATUS = Object.freeze({
   VISIBLE: 'visible',
   HIDDEN: 'hidden',
@@ -120,6 +127,9 @@ const NOTIFICATION_TYPE = Object.freeze({
   MESSAGE_RECEIVED: 'message_received',
   REPORT_RESOLVED: 'report_resolved',
   ROLE_CHANGED: 'role_changed',
+  BADGE_EARNED: 'badge_earned',
+  WELCOME: 'welcome',
+  NEWS_PUBLISHED: 'news_published',
   SYSTEM: 'system',
 });
 
@@ -140,6 +150,22 @@ const COMPONENT_TYPE = Object.freeze({
   OTHER_MICROFLUIDIC_CHIP: 'other-microfluidic-chip',
   OTHER: 'other',
 });
+
+/**
+ * Geometry the in-browser viewer (SCR-019) can render today — every one of
+ * these has a three.js loader that runs without a server-side conversion.
+ *
+ * The CAD interchange formats a chip is usually *authored* in (STEP, IGES) and
+ * the 2D fabrication formats (DXF, DWG) are deliberately absent: a browser
+ * cannot tessellate a B-rep, so those stay download-only until a server-side
+ * STEP→glTF step exists. Keep this in sync with the loader map in the
+ * frontend's ModelViewer.
+ */
+const VIEWABLE_MODEL_EXTENSIONS = Object.freeze([
+  'stl', '3mf', 'obj', 'ply', 'glb', 'gltf', 'fbx',
+  // Toolpaths render as lines rather than surfaces.
+  'gcode', 'nc', 'tap', 'ngc', 'cnc',
+]);
 
 const SORTABLE_DESIGN_FIELDS = Object.freeze([
   'created_at',
@@ -168,6 +194,7 @@ module.exports = {
   DESIGN_STATUS,
   PUBLISH_AS,
   FILE_KIND,
+  MAX_COVER_IMAGES,
   COMMENT_STATUS,
   TOPIC_TYPE,
   TOPIC_STATUS,
@@ -176,6 +203,7 @@ module.exports = {
   NOTIFICATION_TYPE,
   CONTENT_STATUS,
   COMPONENT_TYPE,
+  VIEWABLE_MODEL_EXTENSIONS,
   SORTABLE_DESIGN_FIELDS,
   PAGINATION,
 };

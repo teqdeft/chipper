@@ -111,22 +111,22 @@ export default function DownloadGatePage() {
             {data.license ? <span className="pill">{data.license.code}</span> : null}
           </div>
 
-          <p className="mt-4 text-sm leading-relaxed text-ink-70">
+          <p className="mt-4 text-sm leading-relaxed text-muted">
             Downloads are tracked for citation and community metrics. By confirming, you agree to the
             licence terms and will cite the author when reusing this design in publications.
           </p>
 
           {data.howToCite ? (
-            <p className="mt-4 rounded-field border border-line bg-periwinkle-tint/30 p-3 text-sm leading-relaxed text-ink-70">
+            <p className="mt-4 rounded-field border border-line bg-periwinkle-tint/30 p-3 text-sm leading-relaxed text-muted">
               <span className="font-semibold text-aubergine">How to cite: </span>
               {data.howToCite}
             </p>
           ) : null}
 
           {!canDownload ? (
-            <div className="mt-6 rounded-field border border-dashed border-line-strong bg-canvas px-5 py-8 text-center">
+            <div className="mt-6 rounded-field border border-dashed border-line-strong bg-surface px-5 py-8 text-center">
               <h2 className="font-display text-lg font-bold text-aubergine">Sign in required</h2>
-              <p className="mx-auto mt-2 max-w-sm text-sm text-ink-70">
+              <p className="mx-auto mt-2 max-w-sm text-sm text-muted">
                 You need a Chipper account to download designs. Sign in to accept the licence and start
                 your download.
               </p>
@@ -141,15 +141,15 @@ export default function DownloadGatePage() {
             </div>
           ) : data.files.length === 0 ? (
             <div className="mt-6 rounded-field border border-dashed border-line-strong px-5 py-8 text-center">
-              <p className="text-sm text-ink-70">
+              <p className="text-sm text-muted">
                 This version has no files attached yet. Check back once the uploader adds them.
               </p>
             </div>
           ) : (
             <div className="mt-6 space-y-4">
-              <div className="rounded-field border border-line bg-canvas p-4">
+              <div className="rounded-field border border-line bg-surface p-4">
                 <p className="text-sm font-semibold text-aubergine">Ready to download</p>
-                <p className="mt-1 text-sm text-ink-70">
+                <p className="mt-1 text-sm text-muted">
                   Signed in as <span className="font-semibold">{user?.name}</span>
                   {data.version ? ` · ${data.version.version}` : ''}
                 </p>
@@ -160,7 +160,7 @@ export default function DownloadGatePage() {
                   <li key={file.id} className="flex items-center justify-between gap-4 px-4 py-3">
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold text-aubergine">{file.name}</p>
-                      <p className="text-xs text-ink-55">
+                      <p className="text-xs text-muted">
                         {file.type} · {file.size}
                         {file.isPrimary ? ' · primary' : ''}
                       </p>
@@ -198,7 +198,7 @@ export default function DownloadGatePage() {
       </Reveal>
 
       <Reveal delay={0.12}>
-        <p className="text-center text-xs text-ink-55">
+        <p className="text-center text-xs text-muted">
           Questions about licensing?{' '}
           <Link to="/licenses" className="font-semibold text-deep-coral hover:underline">
             Read our licence guide

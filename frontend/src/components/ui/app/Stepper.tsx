@@ -16,7 +16,7 @@ export function Stepper({ steps, current }: { steps: Step[]; current: number }) 
                   'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold',
                   done && 'bg-green text-canvas',
                   active && 'bg-coral text-aubergine',
-                  !done && !active && 'border border-line bg-canvas text-ink-55',
+                  !done && !active && 'border border-line bg-canvas text-muted',
                 )}
               >
                 {done ? '✓' : String(i + 1).padStart(2, '0')}
@@ -26,8 +26,8 @@ export function Stepper({ steps, current }: { steps: Step[]; current: number }) 
               ) : null}
             </div>
             <div>
-              <p className={cn('text-sm font-semibold', active ? 'text-aubergine' : 'text-ink-70')}>{step.label}</p>
-              {step.description ? <p className="mt-0.5 text-xs text-ink-55">{step.description}</p> : null}
+              <p className={cn('text-sm font-semibold', active ? 'text-aubergine' : 'text-muted')}>{step.label}</p>
+              {step.description ? <p className="mt-0.5 text-xs text-muted">{step.description}</p> : null}
             </div>
           </li>
         );

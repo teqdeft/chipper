@@ -15,6 +15,8 @@ export type Permission =
   | 'design.publish'
   | 'design.download'
   | 'design.moderate'
+  /** Permanent removal of anyone's design — admin only. */
+  | 'design.delete.any'
   | 'comment.create'
   | 'comment.update.own'
   | 'comment.moderate'
