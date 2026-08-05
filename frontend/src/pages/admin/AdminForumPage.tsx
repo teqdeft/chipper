@@ -113,7 +113,7 @@ export default function AdminForumPage() {
       >
         <form
           onSubmit={addCategory}
-          className="mb-4 grid gap-4 rounded-card border border-line bg-surface p-5 shadow-soft sm:grid-cols-[1fr_1.4fr_auto] sm:items-end"
+          className="mb-4 grid gap-4 rounded-card border border-line bg-surface p-5 shadow-soft sm:grid-cols-[1fr_1.4fr_auto] sm:items-start"
         >
           <FieldShell label="Name">
             <TextInput
@@ -130,7 +130,7 @@ export default function AdminForumPage() {
               onChange={(e) => setNewDescription(e.target.value)}
             />
           </FieldShell>
-          <button type="submit" className="btn-primary" disabled={isCreating}>
+          <button type="submit" className="btn-primary sm:mt-[1.875rem]" disabled={isCreating}>
             {isCreating ? 'Adding…' : 'Add category'}
           </button>
         </form>
