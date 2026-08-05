@@ -29,6 +29,7 @@
     scroll-behavior: auto; /* Lenis owns smooth scroll */
     scrollbar-width: thin;
     scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+    overflow-x: clip;
   }
 
   /* Brand scrollbars — aubergine like borders/ink, coral on hover like selection */
@@ -95,7 +96,7 @@
   body {
     @apply bg-canvas text-aubergine font-sans antialiased;
     font-feature-settings: 'cv11', 'ss01';
-    overflow-x: hidden;
+    overflow-x: clip;
   }
 
   ::selection {

@@ -9,7 +9,7 @@ export default function MarketingLayout() {
     <>
       <ScrollProgress />
       <Navbar />
-      <main id="main" className="min-h-screen bg-canvas">
+      <main id="main" className="min-h-screen min-w-0 bg-canvas">
         <AnimatedOutlet />
       </main>
       <Footer />

@@ -197,7 +197,7 @@ export default function Navbar({ mode = 'marketing' }: NavbarProps) {
   }
 
   return (
-    <header className="fixed inset-x-0 top-0 z-50">
+    <header className="fixed inset-x-0 top-0 z-50 overflow-x-clip">
       <div
         className={cn(
           'pointer-events-none absolute inset-x-0 top-0 h-14 border-b transition-[background-color,border-color,opacity] duration-500 ease-premium sm:h-[68px]',
@@ -211,7 +211,7 @@ export default function Navbar({ mode = 'marketing' }: NavbarProps) {
       />
 
       <nav
-        className="container-content relative z-20 flex h-14 items-center justify-between sm:h-[68px]"
+        className="container-content relative z-20 flex h-14 min-w-0 items-center justify-between sm:h-[68px]"
         aria-label="Primary"
       >
         <Link
@@ -231,7 +231,9 @@ export default function Navbar({ mode = 'marketing' }: NavbarProps) {
           />
         </Link>
 
-        <ul className="hidden items-center gap-8 md:flex">
+        {/* Full desktop nav from lg — at md the logo + links + Upload row
+            overflows the viewport and paints a white horizontal strip. */}
+        <ul className="hidden items-center gap-6 lg:flex xl:gap-8">
           {nav.map((item) => (
             <li key={item.href}>
               <NavLink
@@ -244,7 +246,7 @@ export default function Navbar({ mode = 'marketing' }: NavbarProps) {
           ))}
         </ul>
 
-        <div className="hidden items-center gap-2 md:flex lg:gap-3">
+        <div className="hidden items-center gap-2 lg:flex xl:gap-3">
           {isSessionLoading ? (
             <div className="flex items-center gap-2" aria-hidden>
               <span className="h-9 w-24 animate-pulse rounded-btn bg-periwinkle-tint/60" />
@@ -359,7 +361,7 @@ export default function Navbar({ mode = 'marketing' }: NavbarProps) {
 
         {/* gap-2.5, not less: the avatar's ring-offset eats into anything tighter
             and the two controls read as one blob. */}
-        <div className="flex items-center gap-2.5 md:hidden">
+        <div className="flex items-center gap-2.5 lg:hidden">
           {isSessionLoading ? (
             <span className="h-9 w-9 animate-pulse rounded-full bg-periwinkle-tint/60" aria-hidden />
           ) : isAuthenticated ? (
@@ -421,7 +423,7 @@ export default function Navbar({ mode = 'marketing' }: NavbarProps) {
             role="dialog"
             aria-modal="true"
             aria-label="Mobile navigation"
-            className="fixed inset-0 z-10 flex flex-col md:hidden"
+            className="fixed inset-0 z-10 flex flex-col lg:hidden"
             initial={reduced ? { opacity: 0 } : 'closed'}
             animate={reduced ? { opacity: 1 } : 'open'}
             exit={reduced ? { opacity: 0 } : 'closed'}
@@ -601,7 +603,7 @@ function MobileAccountOverlay({
       role="dialog"
       aria-modal="true"
       aria-label="Account menu"
-      className="fixed inset-0 z-10 flex flex-col justify-end md:hidden"
+      className="fixed inset-0 z-10 flex flex-col justify-end lg:hidden"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}

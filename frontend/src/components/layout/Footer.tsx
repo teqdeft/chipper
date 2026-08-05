@@ -38,14 +38,22 @@ export default function Footer() {
           </div>
         </div>
 
-        <div className="mt-12 flex flex-col items-start justify-between gap-4 border-t border-canvas/10 pt-6 text-sm text-canvas/50 sm:mt-16 sm:flex-row sm:items-center sm:pt-8">
+        <div className="mt-12 border-t border-canvas/10 pt-6 text-sm text-canvas/50 sm:mt-16 sm:pt-8">
           <p>
-           © 2012-2026. {site.name}. {footer.legal}.
+            © 2012-2026. {site.name}. {footer.legal}. {footer.credit.prefix}{' '}
+            <span className="text-pink" aria-label="love">
+              ♥
+            </span>{' '}
+            by{' '}
+            <a
+              href={footer.credit.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-canvas/70 transition-colors hover:text-canvas"
+            >
+              {footer.credit.by}
+            </a>
           </p>
-          {/* <p className="flex items-center gap-2">
-            <span className="inline-block h-2 w-2 rounded-full bg-green" aria-hidden />
-            Open Playground
-          </p> */}
         </div>
       </div>
     </footer>

@@ -10,8 +10,8 @@ type ChipLayerProps = {
   stageRef: React.RefObject<HTMLDivElement | null>;
 };
 
-const FRAME_COUNT = 141;
-const framePath = (i: number) => `/frames/chip/f-${String(i + 1).padStart(3, '0')}.png`;
+const FRAME_COUNT = 120;
+const framePath = (i: number) => `/frames/chip/f-${String(i + 1).padStart(3, '0')}.webp`;
 
 /**
  * Frame progress targets (0–1 of the turntable):
@@ -19,8 +19,8 @@ const framePath = (i: number) => `/frames/chip/f-${String(i + 1).padStart(3, '0'
  * - About settles mid-orbit (diagonal / turned) — NOT near loop end,
  *   which reads as “seedhi” / front-on again
  */
-const HERO_FRAME = 0.02; // ~frame 3 — opening pose
-const ABOUT_FRAME = 0.58; // ~frame 82 — strong diagonal / side settle
+const HERO_FRAME = 0.02; // ~frame 3 — opening pose, full channel layout front-on
+const ABOUT_FRAME = 0.58; // ~frame 69 — strong diagonal / side settle
 
 /**
  * Sticky chip over the intro stage.
@@ -187,10 +187,15 @@ export default function ChipLayer({ stageRef }: ChipLayerProps) {
           scrub: isMobile ? 0.3 : 0.4,
           onUpdate: (self) => {
             const p = self.progress;
-            // Orbit through hero → land mid-turn in About (angled, not seedhi).
-            const t = gsap.utils.clamp(0, 1, p / 0.68);
-            const eased = t * t * (3 - 2 * t);
-            heroScroll.progress = HERO_FRAME + (ABOUT_FRAME - HERO_FRAME) * eased;
+            /*
+             * Orbit runs the *whole* stage, linearly. It used to finish at 0.68
+             * on a smoothstep — which decelerated to a standstill and then froze
+             * for the last third, so the chip sat dead still through most of
+             * About ("What is an organ-on-a-chip"). Linear keeps a constant
+             * degrees-per-pixel turn all the way down; the scrub below supplies
+             * the easing, so it still lands softly rather than reading mechanical.
+             */
+            heroScroll.progress = HERO_FRAME + (ABOUT_FRAME - HERO_FRAME) * p;
           },
         });
 
@@ -204,19 +209,24 @@ export default function ChipLayer({ stageRef }: ChipLayerProps) {
         });
 
         // Hero: balanced with left copy + light yaw.
+        // Idle rotateZ must stay 0 — any negative Z rolls the plate so the
+        // right edge reads lifted off the X-axis.
+        // xPercent stays negative on desktop — a rightward nudge past 0 pushes
+        // the plate past the viewport and opens a white strip beside aubergine.
         tl.fromTo(
           frame,
           {
             yPercent: isMobile ? 2 : 0,
-            scale: isMobile ? 0.96 : 1.02,
-            xPercent: isMobile ? 0 : -10,
-            rotateY: isMobile ? -4 : -8,
-            rotateZ: isMobile ? -2 : -4,
+            scale: 1,
+            // Laptop+: sit further into the right column. Clip handles edge spill.
+            xPercent: isMobile ? 0 : 4,
+            rotateY: isMobile ? -2 : -4,
+            rotateZ: 0,
           },
           {
             yPercent: isMobile ? -2 : 2,
-            scale: isMobile ? 0.9 : 0.96,
-            xPercent: isMobile ? 2 : -6,
+            scale: isMobile ? 0.94 : 0.96,
+            xPercent: isMobile ? 2 : 5,
             rotateY: isMobile ? -10 : -14,
             rotateZ: isMobile ? -6 : -8,
             ease: 'none',
@@ -231,7 +241,7 @@ export default function ChipLayer({ stageRef }: ChipLayerProps) {
           {
             yPercent: isMobile ? -8 : 8,
             scale: isMobile ? 0.84 : 0.88,
-            xPercent: isMobile ? 4 : -2,
+            xPercent: isMobile ? 2 : 6,
             rotateY: isMobile ? -18 : -24,
             rotateZ: isMobile ? -10 : -14,
             ease: 'none',
@@ -251,17 +261,35 @@ export default function ChipLayer({ stageRef }: ChipLayerProps) {
 
   return (
     <div className="pointer-events-none sticky top-0 z-[1] h-0 overflow-visible" aria-hidden>
-      {/* Align to content column — right half, not flush viewport edge */}
-      <div className="flex h-[100dvh] min-h-[100svh] w-full items-center">
-        <div className="container-content flex w-full justify-center md:justify-end">
+      {/*
+       * Clip X on this viewport band (not an ancestor of sticky) so GSAP
+       * scale/rotate + drop-shadow can't widen the document and leave a
+       * white strip beside the aubergine stage.
+       */}
+      <div className="flex h-[100dvh] min-h-[100svh] w-full max-w-[100%] items-center overflow-x-clip">
+        <div className="container-content flex w-full min-w-0 justify-center md:justify-end">
           <div
             ref={frameRef}
-            className="relative flex w-full max-w-[min(88vw,30rem)] items-center justify-center will-change-transform md:w-[min(48%,34rem)] md:max-w-[34rem] lg:w-[min(46%,36rem)] lg:max-w-[36rem]"
+            /*
+             * The percentage binds here, not the rem cap: container-content is
+             * 1200px, so after gutters the box is ~1104px and 46% came out to
+             * ~508px — small for a hero product shot.
+             *
+             * Only xl grows. Every narrower tier shares its column with the
+             * headline and has nothing to give: md is barely wider than
+             * max-w-xl, and lg is worse, since the headline jumps to max-w-2xl
+             * at 1024 while the container is still short of its 1200 cap. Real
+             * headroom only appears once the container tops out, so the extra
+             * width waits for xl.
+             */
+            className="relative flex w-full max-w-[min(94vw,34rem)] items-center justify-center will-change-transform md:w-[min(48%,32rem)] md:max-w-[32rem] lg:w-[min(52%,37rem)] lg:max-w-[37rem] xl:w-[min(58%,42rem)] xl:max-w-[42rem]"
           >
             <div
               ref={wrapRef}
               className={cn(
-                'relative aspect-square w-full transition-opacity duration-700 ease-premium',
+                // Matches the 1160×640 source plates — a square box would leave
+                // 44% of the canvas buffer empty and paint nothing into it.
+                'relative aspect-[29/16] w-full transition-opacity duration-700 ease-premium',
                 ready ? 'opacity-100' : 'opacity-0',
               )}
             >

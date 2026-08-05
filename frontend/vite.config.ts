@@ -31,9 +31,30 @@ export default defineConfig({
     host: true,
     port: 5173,
     open: false,
+    // Temporary: allow every host / origin hitting the Vite dev server.
+    allowedHosts: true,
+    cors: true,
+    // Proxy API through Vite so Cloudflare / phone tunnels can reach the
+    // local backend without mixed-content (HTTPS page → http://localhost) blocks.
+    proxy: {
+      '/api': {
+        target: 'http://localhost:5000',
+        changeOrigin: true,
+      },
+      '/static': {
+        target: 'http://localhost:5000',
+        changeOrigin: true,
+      },
+      '/health': {
+        target: 'http://localhost:5000',
+        changeOrigin: true,
+      },
+    },
   },
   preview: {
     host: true,
     port: 4173,
+    allowedHosts: true,
+    cors: true,
   },
 });

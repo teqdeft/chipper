@@ -425,5 +425,10 @@ export const footer = {
       ],
     },
   ],
-  legal: 'All Rights Reserved · 100% remote from around the world',
+  legal: 'All Rights Reserved',
+  credit: {
+    prefix: 'Made with',
+    by: 'Studio Ubique',
+    href: 'https://www.studioubique.com/',
+  },
 };

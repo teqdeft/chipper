@@ -36,6 +36,8 @@ const corsMiddleware = cors({
     const allowed = config.security.corsOrigins;
     // Same-origin / server-to-server requests carry no Origin header.
     if (!origin) return callback(null, true);
+    // Temporary: in development, reflect any Origin so tunnels / LAN always work.
+    if (!config.isProduction) return callback(null, true);
     if (allowed === '*') return callback(null, true);
     if (allowed.includes(origin.toLowerCase().replace(/\/$/, ''))) return callback(null, true);
     return callback(ApiError.forbidden(`Origin ${origin} is not allowed by CORS`, { code: 'CORS_BLOCKED' }));
