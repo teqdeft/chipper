@@ -49,6 +49,8 @@ import AdminModerationPage from '@/pages/admin/AdminModerationPage';
 import AdminCommentsPage from '@/pages/admin/AdminCommentsPage';
 import AdminNewsPage from '@/pages/admin/AdminNewsPage';
 import AdminForumPage from '@/pages/admin/AdminForumPage';
+import AdminTaxonomiesPage from '@/pages/admin/AdminTaxonomiesPage';
+import AdminAuditPage from '@/pages/admin/AdminAuditPage';
 import NotFoundPage from '@/pages/NotFoundPage';
 
 /**
@@ -160,32 +162,38 @@ export default function App() {
               </Route>
 
               {/* ── Admin — SCR-032..038, per-screen capability ─────────────
-                  The console has its own entrance at /admin/login; the guard
-                  redirects unauthenticated visits to it. Outside the layout so
-                  the sign-in page has no admin chrome. */}
+                  Login sits outside the shell. The console itself is gated by
+                  RequireAccess("admin") first so non-staff never see admin chrome
+                  or an access-denied page — they go straight to /admin/login. */}
               <Route path="admin/login" element={<AdminLoginPage />} />
 
-              <Route path="admin" element={<AdminLayout />}>
-                <Route element={<RequireAccess screen="admin" />}>
+              <Route path="admin" element={<RequireAccess screen="admin" />}>
+                <Route element={<AdminLayout />}>
                   <Route index element={<AdminDashboardPage />} />
-                </Route>
-                <Route element={<RequireAccess screen="admin/users" />}>
-                  <Route path="users" element={<AdminUsersPage />} />
-                </Route>
-                <Route element={<RequireAccess screen="admin/designs" />}>
-                  <Route path="designs" element={<AdminDesignsPage />} />
-                </Route>
-                <Route element={<RequireAccess screen="admin/moderation" />}>
-                  <Route path="moderation" element={<AdminModerationPage />} />
-                </Route>
-                <Route element={<RequireAccess screen="admin/comments" />}>
-                  <Route path="comments" element={<AdminCommentsPage />} />
-                </Route>
-                <Route element={<RequireAccess screen="admin/news" />}>
-                  <Route path="news" element={<AdminNewsPage />} />
-                </Route>
-                <Route element={<RequireAccess screen="admin/forum" />}>
-                  <Route path="forum" element={<AdminForumPage />} />
+                  <Route element={<RequireAccess screen="admin/users" />}>
+                    <Route path="users" element={<AdminUsersPage />} />
+                  </Route>
+                  <Route element={<RequireAccess screen="admin/designs" />}>
+                    <Route path="designs" element={<AdminDesignsPage />} />
+                  </Route>
+                  <Route element={<RequireAccess screen="admin/moderation" />}>
+                    <Route path="moderation" element={<AdminModerationPage />} />
+                  </Route>
+                  <Route element={<RequireAccess screen="admin/comments" />}>
+                    <Route path="comments" element={<AdminCommentsPage />} />
+                  </Route>
+                  <Route element={<RequireAccess screen="admin/news" />}>
+                    <Route path="news" element={<AdminNewsPage />} />
+                  </Route>
+                  <Route element={<RequireAccess screen="admin/forum" />}>
+                    <Route path="forum" element={<AdminForumPage />} />
+                  </Route>
+                  <Route element={<RequireAccess screen="admin/taxonomies" />}>
+                    <Route path="taxonomies" element={<AdminTaxonomiesPage />} />
+                  </Route>
+                  <Route element={<RequireAccess screen="admin/audit" />}>
+                    <Route path="audit" element={<AdminAuditPage />} />
+                  </Route>
                 </Route>
               </Route>
 

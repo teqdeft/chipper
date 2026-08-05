@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { AdminActionBar, AdminActionButton, AdminToolbar } from '@/components/admin';
 import { PageHeader } from '@/components/ui/app/PageHeader';
 import { DataTable } from '@/components/ui/app/DataTable';
 import { StatusBadge } from '@/components/ui/app/StatusBadge';
@@ -32,7 +33,6 @@ const STATUS_AFTER: Record<DesignReviewAction, AdminDesign['status']> = {
 export default function AdminDesignsPage() {
   const toast = useToast();
   const { hasPermission } = useAuth();
-  // Moderators archive; only an admin holds the irreversible one.
   const canDelete = hasPermission('design.delete.any');
 
   const [search, setSearch] = useState('');
@@ -55,11 +55,10 @@ export default function AdminDesignsPage() {
   const pendingCount = data?.items.filter((d) => d.status === 'pending').length ?? 0;
 
   async function review(row: AdminDesign, action: DesignReviewAction) {
-    // Rejection deserves a reason — the uploader is notified with it.
     let note: string | undefined;
     if (action === 'reject') {
       const answer = window.prompt(`Reject "${row.title}" — add a note for the uploader (optional):`);
-      if (answer === null) return; // cancelled
+      if (answer === null) return;
       note = answer || undefined;
     }
 
@@ -87,11 +86,6 @@ export default function AdminDesignsPage() {
     }
   }
 
-  /**
-   * Irreversible, so it asks twice: once to acknowledge what goes, once for the
-   * reason the uploader is sent. Reloads rather than patching local state — a
-   * removed row changes the page's totals, not just its contents.
-   */
   async function destroy(row: AdminDesign) {
     const confirmed = window.confirm(
       `Permanently delete "${row.title}"?\n\n` +
@@ -101,7 +95,7 @@ export default function AdminDesignsPage() {
     if (!confirmed) return;
 
     const answer = window.prompt('Reason for the uploader (optional):');
-    if (answer === null) return; // cancelled
+    if (answer === null) return;
 
     setBusyId(row.id);
     try {
@@ -139,7 +133,7 @@ export default function AdminDesignsPage() {
   return (
     <div className="space-y-8">
       <PageHeader
-        eyebrow="Administration"
+        eyebrow="Moderation"
         title="Designs"
         lede="Review pending uploads, publish approved work, archive outdated versions — or delete one outright."
         actions={
@@ -147,8 +141,7 @@ export default function AdminDesignsPage() {
         }
       />
 
-      <form
-        className="flex flex-wrap items-end gap-3"
+      <AdminToolbar
         onSubmit={(e) => {
           e.preventDefault();
           setPage(1);
@@ -180,7 +173,7 @@ export default function AdminDesignsPage() {
         <button type="submit" className="btn-ghost text-sm">
           Search
         </button>
-      </form>
+      </AdminToolbar>
 
       {isLoading ? (
         <LoadingState label="Loading designs…" />
@@ -242,72 +235,46 @@ export default function AdminDesignsPage() {
                 render: (row) => {
                   const busy = busyId === row.id;
                   return (
-                    <div className="flex flex-wrap gap-1.5">
+                    <AdminActionBar>
                       {row.status === 'pending' ? (
                         <>
-                          <button
-                            type="button"
-                            disabled={busy}
-                            className="rounded-field border border-green/40 bg-green/10 px-2 py-1 text-[0.7rem] font-semibold text-published-green hover:bg-green/20 disabled:opacity-40"
-                            onClick={() => void review(row, 'approve')}
-                          >
+                          <AdminActionButton tone="success" disabled={busy} onClick={() => void review(row, 'approve')}>
                             Approve
-                          </button>
-                          <button
-                            type="button"
-                            disabled={busy}
-                            className="rounded-field border border-deep-coral/40 bg-coral/10 px-2 py-1 text-[0.7rem] font-semibold text-deep-coral hover:bg-coral/20 disabled:opacity-40"
-                            onClick={() => void review(row, 'reject')}
-                          >
+                          </AdminActionButton>
+                          <AdminActionButton tone="danger" disabled={busy} onClick={() => void review(row, 'reject')}>
                             Reject
-                          </button>
+                          </AdminActionButton>
                         </>
                       ) : null}
 
                       {row.status === 'published' ? (
                         <>
-                          <button
-                            type="button"
-                            disabled={busy}
-                            className="rounded-field border border-line px-2 py-1 text-[0.7rem] font-semibold text-muted hover:bg-periwinkle-tint/50 disabled:opacity-40"
-                            onClick={() => void toggleFeatured(row)}
-                          >
+                          <AdminActionButton disabled={busy} onClick={() => void toggleFeatured(row)}>
                             {row.featured ? 'Unfeature' : 'Feature'}
-                          </button>
-                          <button
-                            type="button"
-                            disabled={busy}
-                            className="rounded-field border border-line px-2 py-1 text-[0.7rem] font-semibold text-muted hover:bg-periwinkle-tint/50 disabled:opacity-40"
-                            onClick={() => void review(row, 'archive')}
-                          >
+                          </AdminActionButton>
+                          <AdminActionButton disabled={busy} onClick={() => void review(row, 'archive')}>
                             Archive
-                          </button>
+                          </AdminActionButton>
                         </>
                       ) : null}
 
                       {row.status === 'archived' || row.status === 'rejected' ? (
-                        <button
-                          type="button"
-                          disabled={busy}
-                          className="rounded-field border border-line px-2 py-1 text-[0.7rem] font-semibold text-muted hover:bg-periwinkle-tint/50 disabled:opacity-40"
-                          onClick={() => void review(row, 'restore')}
-                        >
+                        <AdminActionButton disabled={busy} onClick={() => void review(row, 'restore')}>
                           Restore
-                        </button>
+                        </AdminActionButton>
                       ) : null}
 
                       {canDelete ? (
-                        <button
-                          type="button"
+                        <AdminActionButton
+                          tone="danger"
                           disabled={busy}
                           title="Permanently deletes the design and its files — archive instead to keep them"
-                          className="rounded-field border border-deep-coral bg-deep-coral/10 px-2 py-1 text-[0.7rem] font-semibold text-deep-coral hover:bg-deep-coral hover:text-canvas disabled:opacity-40"
                           onClick={() => void destroy(row)}
                         >
                           Delete
-                        </button>
+                        </AdminActionButton>
                       ) : null}
-                    </div>
+                    </AdminActionBar>
                   );
                 },
               },

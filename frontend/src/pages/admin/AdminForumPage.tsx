@@ -1,12 +1,12 @@
 import { FormEvent, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { AdminActionBar, AdminActionButton, AdminSection } from '@/components/admin';
 import { PageHeader } from '@/components/ui/app/PageHeader';
 import { DataTable } from '@/components/ui/app/DataTable';
 import { StatusBadge } from '@/components/ui/app/StatusBadge';
 import { FieldShell, TextInput } from '@/components/ui/app/FormField';
 import { ErrorState, LoadingState } from '@/components/ui/app/LoadingState';
 import { Pagination } from '@/components/ui/app/Pagination';
-import { Reveal } from '@/components/ui/Reveal';
 import { useApiResource } from '@/hooks/useApiResource';
 import { useToast } from '@/app/providers/ToastProvider';
 import { adminApi } from '@/lib/api/admin';
@@ -36,7 +36,6 @@ export default function AdminForumPage() {
 
     setIsCreating(true);
     try {
-      // The slug is derived server-side from the name, so the form stays short.
       await adminApi.createCategory({ name: newName.trim(), description: newDescription.trim() || undefined });
       toast.success('Category created', newName.trim());
       setNewName('');
@@ -71,7 +70,6 @@ export default function AdminForumPage() {
       toast.success('Category removed', category.name);
       await categories.reload();
     } catch (err) {
-      // A non-empty category returns 409 with a clear message — surface it.
       toast.fromError(err);
     } finally {
       setBusyKey(null);
@@ -103,37 +101,39 @@ export default function AdminForumPage() {
   return (
     <div className="space-y-10">
       <PageHeader
-        eyebrow="Administration"
+        eyebrow="Content"
         title="Forum"
         lede="Create categories, and pin or lock the threads that need it."
       />
 
-      {/* ── Categories ─────────────────────────────────────────────────── */}
-      <section className="space-y-4">
-        <h2 className="font-display text-lg font-bold text-aubergine">Categories</h2>
-
-        <Reveal>
-          <form onSubmit={addCategory} className="card grid gap-4 p-5 sm:grid-cols-[1fr_1.4fr_auto] sm:items-end">
-            <FieldShell label="Name">
-              <TextInput
-                placeholder="Fabrication"
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                required
-              />
-            </FieldShell>
-            <FieldShell label="Description" hint="Optional one-liner shown on the forum home">
-              <TextInput
-                placeholder="Bonding, moulding, machining and printing."
-                value={newDescription}
-                onChange={(e) => setNewDescription(e.target.value)}
-              />
-            </FieldShell>
-            <button type="submit" className="btn-primary" disabled={isCreating}>
-              {isCreating ? 'Adding…' : 'Add category'}
-            </button>
-          </form>
-        </Reveal>
+      <AdminSection
+        title="Categories"
+        description="Structure the community forum. Locked categories accept no new topics."
+        panel={false}
+      >
+        <form
+          onSubmit={addCategory}
+          className="mb-4 grid gap-4 rounded-card border border-line bg-surface p-5 shadow-soft sm:grid-cols-[1fr_1.4fr_auto] sm:items-end"
+        >
+          <FieldShell label="Name">
+            <TextInput
+              placeholder="Fabrication"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              required
+            />
+          </FieldShell>
+          <FieldShell label="Description" hint="Optional one-liner shown on the forum home">
+            <TextInput
+              placeholder="Bonding, moulding, machining and printing."
+              value={newDescription}
+              onChange={(e) => setNewDescription(e.target.value)}
+            />
+          </FieldShell>
+          <button type="submit" className="btn-primary" disabled={isCreating}>
+            {isCreating ? 'Adding…' : 'Add category'}
+          </button>
+        </form>
 
         {categories.isLoading ? (
           <LoadingState label="Loading categories…" className="min-h-[20vh]" />
@@ -183,37 +183,28 @@ export default function AdminForumPage() {
                   if (!original) return null;
                   const busy = busyKey === row.slug;
                   return (
-                    <div className="flex flex-wrap gap-1.5">
-                      <button
-                        type="button"
-                        disabled={busy}
-                        className="rounded-field border border-line px-2 py-1 text-[0.7rem] font-semibold text-muted hover:bg-periwinkle-tint/50 disabled:opacity-40"
-                        onClick={() => void toggleCategoryLock(original)}
-                      >
+                    <AdminActionBar>
+                      <AdminActionButton disabled={busy} onClick={() => void toggleCategoryLock(original)}>
                         {row.is_locked ? 'Unlock' : 'Lock'}
-                      </button>
-                      <button
-                        type="button"
+                      </AdminActionButton>
+                      <AdminActionButton
+                        tone="danger"
                         disabled={busy || row.topic_count > 0}
                         title={row.topic_count > 0 ? 'Move or remove its topics first' : undefined}
-                        className="rounded-field border border-deep-coral/40 bg-coral/10 px-2 py-1 text-[0.7rem] font-semibold text-deep-coral hover:bg-coral/20 disabled:opacity-40"
                         onClick={() => void removeCategory(original)}
                       >
                         Delete
-                      </button>
-                    </div>
+                      </AdminActionButton>
+                    </AdminActionBar>
                   );
                 },
               },
             ]}
           />
         ) : null}
-      </section>
+      </AdminSection>
 
-      {/* ── Topics ─────────────────────────────────────────────────────── */}
-      <section className="space-y-4">
-        <h2 className="font-display text-lg font-bold text-aubergine">Recent topics</h2>
-
+      <AdminSection title="Recent topics" description="Pin important threads or lock heated ones." panel={false}>
         {topics.isLoading ? (
           <LoadingState label="Loading topics…" className="min-h-[20vh]" />
         ) : topics.error ? (
@@ -257,19 +248,15 @@ export default function AdminForumPage() {
                     if (!original) return null;
                     const busy = busyKey === row.slug;
                     return (
-                      <div className="flex flex-wrap gap-1.5">
-                        <button
-                          type="button"
+                      <AdminActionBar>
+                        <AdminActionButton
                           disabled={busy}
-                          className="rounded-field border border-line px-2 py-1 text-[0.7rem] font-semibold text-muted hover:bg-periwinkle-tint/50 disabled:opacity-40"
                           onClick={() => void moderateTopic(original, { pinned: !row.pinned })}
                         >
                           {row.pinned ? 'Unpin' : 'Pin'}
-                        </button>
-                        <button
-                          type="button"
+                        </AdminActionButton>
+                        <AdminActionButton
                           disabled={busy}
-                          className="rounded-field border border-line px-2 py-1 text-[0.7rem] font-semibold text-muted hover:bg-periwinkle-tint/50 disabled:opacity-40"
                           onClick={() =>
                             void moderateTopic(original, {
                               status: row.status === 'locked' ? 'open' : 'locked',
@@ -277,8 +264,8 @@ export default function AdminForumPage() {
                           }
                         >
                           {row.status === 'locked' ? 'Unlock' : 'Lock'}
-                        </button>
-                      </div>
+                        </AdminActionButton>
+                      </AdminActionBar>
                     );
                   },
                 },
@@ -288,7 +275,7 @@ export default function AdminForumPage() {
             <Pagination pagination={topics.data.pagination} onPage={setTopicPage} />
           </>
         ) : null}
-      </section>
+      </AdminSection>
     </div>
   );
 }

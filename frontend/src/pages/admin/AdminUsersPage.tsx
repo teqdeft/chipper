@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { AdminActionBar, AdminActionButton, AdminToolbar } from '@/components/admin';
 import { PageHeader } from '@/components/ui/app/PageHeader';
 import { DataTable } from '@/components/ui/app/DataTable';
 import { StatusBadge } from '@/components/ui/app/StatusBadge';
@@ -8,7 +9,7 @@ import { Pagination } from '@/components/ui/app/Pagination';
 import { useApiResource } from '@/hooks/useApiResource';
 import { useToast } from '@/app/providers/ToastProvider';
 import { useAuth } from '@/app/providers/AuthProvider';
-import { adminApi } from '@/lib/api/admin';
+import { AWARDABLE_BADGES, adminApi } from '@/lib/api/admin';
 import type { AdminUser } from '@/lib/api/admin';
 import type { Role, UserStatus } from '@/lib/api/types';
 
@@ -27,7 +28,6 @@ const statusTone: Record<UserStatus, 'green' | 'yellow' | 'coral' | 'ink'> = {
   banned: 'ink',
 };
 
-/** Roles an admin can hand out from the table. */
 const ASSIGNABLE_ROLES: Role[] = ['user', 'uploader', 'commercial', 'moderator', 'admin'];
 
 /** SCR-033 — Manage users (CHIP-036). */
@@ -40,7 +40,6 @@ export default function AdminUsersPage() {
   const [roleFilter, setRoleFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [page, setPage] = useState(1);
-  /** Row currently running a request — disables just that row's controls. */
   const [busyId, setBusyId] = useState<number | null>(null);
 
   const { data, isLoading, error, reload, setData } = useApiResource(
@@ -57,7 +56,7 @@ export default function AdminUsersPage() {
 
   function patchRow(updated: AdminUser) {
     if (!data) return;
-    setData({ ...data, items: data.items.map((row) => (row.id === updated.id ? updated : row)) });
+    setData({ ...data, items: data.items.map((row) => (row.id === updated.id ? { ...row, ...updated } : row)) });
   }
 
   async function changeRole(row: AdminUser, role: Role) {
@@ -73,7 +72,6 @@ export default function AdminUsersPage() {
   }
 
   async function changeStatus(row: AdminUser, status: UserStatus) {
-    // Suspension/ban deserve a beat of confirmation; reactivation does not.
     if (
       status !== 'active' &&
       !window.confirm(
@@ -96,16 +94,29 @@ export default function AdminUsersPage() {
     }
   }
 
+  async function awardBadge(row: AdminUser, badge: string) {
+    if (!badge) return;
+    setBusyId(row.id);
+    try {
+      await adminApi.awardBadge(row.id, badge);
+      const label = AWARDABLE_BADGES.find((b) => b.slug === badge)?.name ?? badge;
+      toast.success('Badge awarded', `${label} → ${row.name}`);
+    } catch (err) {
+      toast.fromError(err);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   return (
     <div className="space-y-8">
       <PageHeader
-        eyebrow="Administration"
+        eyebrow="Community"
         title="Users"
-        lede="Manage roles, verify uploaders and monitor community reputation."
+        lede="Manage roles, award badges, and monitor community reputation."
       />
 
-      <form
-        className="flex flex-wrap items-end gap-3"
+      <AdminToolbar
         onSubmit={(e) => {
           e.preventDefault();
           setPage(1);
@@ -152,7 +163,7 @@ export default function AdminUsersPage() {
         <button type="submit" className="btn-ghost text-sm">
           Search
         </button>
-      </form>
+      </AdminToolbar>
 
       {isLoading ? (
         <LoadingState label="Loading users…" />
@@ -216,7 +227,7 @@ export default function AdminUsersPage() {
                   if (!original) return null;
 
                   return (
-                    <div className="flex flex-wrap items-center gap-1.5">
+                    <AdminActionBar>
                       <TextSelect
                         className="!w-auto !px-2 !py-1 text-xs"
                         value={row.role}
@@ -231,36 +242,50 @@ export default function AdminUsersPage() {
                         ))}
                       </TextSelect>
 
+                      <TextSelect
+                        className="!w-auto !px-2 !py-1 text-xs"
+                        defaultValue=""
+                        disabled={busy}
+                        onChange={(e) => {
+                          const badge = e.target.value;
+                          e.target.value = '';
+                          void awardBadge(original, badge);
+                        }}
+                        aria-label={`Award badge to ${row.name}`}
+                      >
+                        <option value="" disabled>
+                          Award badge…
+                        </option>
+                        {AWARDABLE_BADGES.map((badge) => (
+                          <option key={badge.slug} value={badge.slug}>
+                            {badge.name}
+                          </option>
+                        ))}
+                      </TextSelect>
+
                       {row.status === 'active' || row.status === 'pending' ? (
                         <>
-                          <button
-                            type="button"
-                            disabled={busy}
-                            className="rounded-field border border-line px-2 py-1 text-[0.7rem] font-semibold text-muted hover:bg-periwinkle-tint/50 disabled:opacity-40"
-                            onClick={() => void changeStatus(original, 'suspended')}
-                          >
+                          <AdminActionButton disabled={busy} onClick={() => void changeStatus(original, 'suspended')}>
                             Suspend
-                          </button>
-                          <button
-                            type="button"
+                          </AdminActionButton>
+                          <AdminActionButton
+                            tone="danger"
                             disabled={busy}
-                            className="rounded-field border border-deep-coral/40 bg-coral/10 px-2 py-1 text-[0.7rem] font-semibold text-deep-coral hover:bg-coral/20 disabled:opacity-40"
                             onClick={() => void changeStatus(original, 'banned')}
                           >
                             Ban
-                          </button>
+                          </AdminActionButton>
                         </>
                       ) : (
-                        <button
-                          type="button"
+                        <AdminActionButton
+                          tone="success"
                           disabled={busy}
-                          className="rounded-field border border-green/40 bg-green/10 px-2 py-1 text-[0.7rem] font-semibold text-published-green hover:bg-green/20 disabled:opacity-40"
                           onClick={() => void changeStatus(original, 'active')}
                         >
                           Reactivate
-                        </button>
+                        </AdminActionButton>
                       )}
-                    </div>
+                    </AdminActionBar>
                   );
                 },
               },

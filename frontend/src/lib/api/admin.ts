@@ -180,6 +180,12 @@ export const adminApi = {
   changeStatus: (userId: number, status: UserStatus, reason?: string) =>
     api.patch<{ user: AdminUser }>(`/admin/users/${userId}/status`, { status, reason }).then((r) => r.data.user),
 
+  getUser: (userId: number) =>
+    api.get<{ user: AdminUserDetail }>(`/admin/users/${userId}`).then((r) => r.data.user),
+
+  awardBadge: (userId: number, badge: string) =>
+    api.post<{ user: AdminUserDetail }>(`/admin/users/${userId}/badges`, { badge }).then((r) => r.data.user),
+
   // ── Designs ──────────────────────────────────────────────────────────────
   designs: (filters: { page?: number; limit?: number; search?: string; status?: string } = {}) =>
     paged<AdminDesign>(`/admin/designs${toQuery(filters)}`),
@@ -265,6 +271,21 @@ export const adminApi = {
   /** Pin, lock or move a topic (moderator+, /forum/topics/:id/moderate). */
   moderateTopic: (identifier: string, payload: { pinned?: boolean; status?: 'open' | 'solved' | 'locked' }) =>
     api.patch<{ topic: AdminTopic }>(`/forum/topics/${identifier}/moderate`, payload).then((r) => r.data.topic),
+
+  // ── Taxonomies ───────────────────────────────────────────────────────────
+  upsertTaxonomy: (table: TaxonomyTable, payload: TaxonomyPayload) =>
+    api.put<{ item: unknown }>(`/admin/taxonomies/${table}`, payload).then((r) => r.data),
+
+  deleteTaxonomy: (table: TaxonomyTable, identifier: string) =>
+    api
+      .delete<{ deactivated: boolean }>(
+        `/admin/taxonomies/${table}/${encodeURIComponent(identifier)}`,
+      )
+      .then((r) => r.data),
+
+  // ── Audit ────────────────────────────────────────────────────────────────
+  auditLogs: (filters: { page?: number; limit?: number; action?: string; entityType?: string; userId?: number } = {}) =>
+    paged<AdminAuditLog>(`/admin/audit-logs${toQuery(filters)}`),
 };
 
 export type AdminTopic = {
@@ -280,3 +301,60 @@ export type AdminTopic = {
   author: { name: string; handle: string };
   createdAt: string;
 };
+
+export type AdminUserDetail = AdminUser & {
+  bio?: string | null;
+  badges?: Array<{ slug: string; name: string; description?: string; tone?: string; awarded_at?: string }>;
+  expertise?: string[];
+  designCount?: number;
+  activeSessions?: number;
+  suspensionReason?: string | null;
+  suspendedUntil?: string | null;
+};
+
+export type TaxonomyTable =
+  | 'component_types'
+  | 'resource_types'
+  | 'organs'
+  | 'materials'
+  | 'fabrication_methods'
+  | 'model_types'
+  | 'licenses';
+
+export type TaxonomyPayload = {
+  name: string;
+  slug?: string;
+  code?: string;
+  note?: string | null;
+  description?: string | null;
+  family?: string | null;
+  url?: string | null;
+  summary?: string | null;
+  requiresAttribution?: boolean;
+  allowsCommercial?: boolean;
+  shareAlike?: boolean;
+  sortOrder?: number;
+  active?: boolean;
+};
+
+export type AdminAuditLog = {
+  id: number;
+  action: string;
+  entityType: string | null;
+  entityId: number | null;
+  actor: { name: string; handle: string } | null;
+  changes: unknown;
+  ip: string | null;
+  at: string;
+};
+
+/** Known badge slugs from the seed set — used by the award UI. */
+export const AWARDABLE_BADGES = [
+  { slug: 'verified-maker', name: 'Verified maker' },
+  { slug: 'iso-contributor', name: 'ISO contributor' },
+  { slug: 'early-adopter', name: 'Early adopter' },
+  { slug: 'first-upload', name: 'First upload' },
+  { slug: 'top-contributor', name: 'Top contributor' },
+  { slug: 'helpful-answer', name: 'Helpful answer' },
+] as const;
+

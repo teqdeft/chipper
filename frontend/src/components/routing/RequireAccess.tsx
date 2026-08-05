@@ -8,14 +8,15 @@
  *   </Route>
  *
  * Behaviour by denial reason:
- *   unauthenticated → redirect to /login, remembering where the user was headed
+ *   unauthenticated → redirect to /login (or /admin/login for console screens)
  *   unverified      → redirect to /verify-email
- *   forbidden       → render a "no access" screen (not a redirect, so the user
- *                     understands what happened instead of bouncing silently)
+ *   forbidden       → "no access" screen for community routes; console screens
+ *                     never show that page — non-staff go to /admin/login,
+ *                     staff without that capability go to /admin
  */
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '@/app/providers/AuthProvider';
-import { checkAccess, ROLE_LABEL, SCREEN_ACCESS } from '@/lib/access';
+import { ROLE_LEVEL, checkAccess, ROLE_LABEL, SCREEN_ACCESS } from '@/lib/access';
 import type { ScreenKey } from '@/lib/access';
 import { EmptyState } from '@/components/ui/app/EmptyState';
 
@@ -24,6 +25,10 @@ type RequireAccessProps = {
   /** Render inline instead of wrapping nested routes. */
   children?: React.ReactNode;
 };
+
+function isAdminScreen(screen: ScreenKey) {
+  return screen === 'admin' || screen.startsWith('admin/');
+}
 
 function AccessPending() {
   return (
@@ -40,6 +45,7 @@ export default function RequireAccess({ screen, children }: RequireAccessProps) 
   const { viewer, isLoading } = useAuth();
   const location = useLocation();
   const required = SCREEN_ACCESS[screen];
+  const consoleScreen = isAdminScreen(screen);
 
   // Never decide before the session has been restored, or a reload would bounce
   // a signed-in user to /login.
@@ -50,12 +56,9 @@ export default function RequireAccess({ screen, children }: RequireAccessProps) 
   if (result.allowed) return <>{children ?? <Outlet />}</>;
 
   if (result.reason === 'unauthenticated') {
-    // The console has its own entrance — staff screens send you there, not to
-    // the community sign-in.
-    const isConsoleScreen = screen === 'admin' || screen.startsWith('admin/');
     return (
       <Navigate
-        to={isConsoleScreen ? '/admin/login' : '/login'}
+        to={consoleScreen ? '/admin/login' : '/login'}
         replace
         state={{ from: location, screen: required.label }}
       />
@@ -64,6 +67,22 @@ export default function RequireAccess({ screen, children }: RequireAccessProps) 
 
   if (result.reason === 'unverified') {
     return <Navigate to="/verify-email" replace state={{ from: location, reason: 'unverified' }} />;
+  }
+
+  // Console: never show an "access denied" page — send people to the door, or
+  // (if they are already staff) back to the dashboard they can use.
+  if (result.reason === 'forbidden' && consoleScreen) {
+    const isStaff = Boolean(viewer && ROLE_LEVEL[viewer.role] >= ROLE_LEVEL.moderator);
+    if (!isStaff) {
+      return (
+        <Navigate
+          to="/admin/login"
+          replace
+          state={{ from: location, screen: required.label }}
+        />
+      );
+    }
+    return <Navigate to="/admin" replace />;
   }
 
   const needed = required.minRole

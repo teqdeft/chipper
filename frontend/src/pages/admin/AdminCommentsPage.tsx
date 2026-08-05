@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { AdminActionBar, AdminActionButton, AdminToolbar } from '@/components/admin';
 import { PageHeader } from '@/components/ui/app/PageHeader';
 import { EmptyState } from '@/components/ui/app/EmptyState';
 import { StatusBadge } from '@/components/ui/app/StatusBadge';
@@ -67,13 +68,12 @@ export default function AdminCommentsPage() {
   return (
     <div className="space-y-8">
       <PageHeader
-        eyebrow="Administration"
+        eyebrow="Moderation"
         title="Comments"
         lede="Every comment across the design library. Hide spam, restore mistakes."
       />
 
-      <form
-        className="flex flex-wrap items-end gap-3"
+      <AdminToolbar
         onSubmit={(e) => {
           e.preventDefault();
           setPage(1);
@@ -105,7 +105,7 @@ export default function AdminCommentsPage() {
         <button type="submit" className="btn-ghost text-sm">
           Search
         </button>
-      </form>
+      </AdminToolbar>
 
       {isLoading ? (
         <LoadingState label="Loading comments…" />
@@ -117,62 +117,57 @@ export default function AdminCommentsPage() {
         </Reveal>
       ) : (
         <>
-          <RevealGroup className="space-y-3" stagger={0.05}>
+          <RevealGroup className="space-y-3" stagger={0.04}>
             {data.items.map((comment) => {
               const busy = busyId === comment.id;
               return (
                 <RevealItem key={comment.id}>
-                  <div className="card flex flex-col gap-4 p-5 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <StatusBadge tone={statusTone[comment.status]}>{comment.status}</StatusBadge>
-                        <span className="text-sm font-semibold text-aubergine">
-                          {comment.author.name}
-                          <span className="font-normal text-muted"> on </span>
-                          <Link
-                            to={`/designs/${comment.design.slug}`}
-                            className="hover:text-deep-coral hover:underline"
-                          >
-                            {comment.design.title}
-                          </Link>
-                        </span>
+                  <div className="rounded-card border border-line bg-surface p-5 shadow-soft">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <StatusBadge tone={statusTone[comment.status]}>{comment.status}</StatusBadge>
+                          <span className="text-sm font-semibold text-aubergine">
+                            {comment.author.name}
+                            <span className="font-normal text-muted"> on </span>
+                            <Link
+                              to={`/designs/${comment.design.slug}`}
+                              className="hover:text-deep-coral hover:underline"
+                            >
+                              {comment.design.title}
+                            </Link>
+                          </span>
+                        </div>
+                        <p className="mt-2 text-sm leading-relaxed text-muted">{comment.body}</p>
+                        <p className="mt-2 text-xs text-muted">
+                          @{comment.author.handle} · {new Date(comment.createdAt).toLocaleDateString()}
+                        </p>
                       </div>
-                      <p className="mt-2 text-sm leading-relaxed text-muted">{comment.body}</p>
-                      <p className="mt-2 text-xs text-muted">
-                        @{comment.author.handle} · {new Date(comment.createdAt).toLocaleDateString()}
-                      </p>
-                    </div>
 
-                    <div className="flex shrink-0 flex-wrap gap-2">
-                      {comment.status === 'visible' ? (
-                        <button
-                          type="button"
-                          disabled={busy}
-                          className="rounded-field border border-line px-3 py-1.5 text-xs font-semibold text-muted hover:bg-periwinkle-tint/50 disabled:opacity-40"
-                          onClick={() => void moderate(comment, 'hide')}
-                        >
-                          Hide
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          disabled={busy}
-                          className="rounded-field border border-green/40 bg-green/10 px-3 py-1.5 text-xs font-semibold text-published-green hover:bg-green/20 disabled:opacity-40"
-                          onClick={() => void moderate(comment, 'restore')}
-                        >
-                          Restore
-                        </button>
-                      )}
-                      {comment.status !== 'removed' ? (
-                        <button
-                          type="button"
-                          disabled={busy}
-                          className="rounded-field border border-deep-coral/40 bg-coral/10 px-3 py-1.5 text-xs font-semibold text-deep-coral hover:bg-coral/20 disabled:opacity-40"
-                          onClick={() => void moderate(comment, 'remove')}
-                        >
-                          Remove
-                        </button>
-                      ) : null}
+                      <AdminActionBar className="shrink-0">
+                        {comment.status === 'visible' ? (
+                          <AdminActionButton disabled={busy} onClick={() => void moderate(comment, 'hide')}>
+                            Hide
+                          </AdminActionButton>
+                        ) : (
+                          <AdminActionButton
+                            tone="success"
+                            disabled={busy}
+                            onClick={() => void moderate(comment, 'restore')}
+                          >
+                            Restore
+                          </AdminActionButton>
+                        )}
+                        {comment.status !== 'removed' ? (
+                          <AdminActionButton
+                            tone="danger"
+                            disabled={busy}
+                            onClick={() => void moderate(comment, 'remove')}
+                          >
+                            Remove
+                          </AdminActionButton>
+                        ) : null}
+                      </AdminActionBar>
                     </div>
                   </div>
                 </RevealItem>

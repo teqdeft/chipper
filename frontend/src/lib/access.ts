@@ -136,8 +136,15 @@ export const SCREEN_ACCESS = defineScreens({
     minRole: 'moderator',
     permissions: ['comment.moderate'],
   },
-  'admin/news': { id: 'SCR-037', label: 'Manage news & pages', minRole: 'admin', permissions: ['content.manage'] },
+  'admin/news': { id: 'SCR-037', label: 'Manage news', minRole: 'admin', permissions: ['content.manage'] },
   'admin/forum': { id: 'SCR-038', label: 'Manage forum', minRole: 'admin', permissions: ['forum.manage'] },
+  'admin/taxonomies': {
+    id: 'SCR-038b',
+    label: 'Manage taxonomies',
+    minRole: 'admin',
+    permissions: ['taxonomy.manage'],
+  },
+  'admin/audit': { id: 'SCR-038d', label: 'Audit log', minRole: 'admin', permissions: ['audit.view'] },
 
   // ── Commercial (SCR-039 · gated on the client's Q2 answer) ───────────
   'seller/dashboard': {

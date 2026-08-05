@@ -1,4 +1,5 @@
 import { FormEvent, useState } from 'react';
+import { AdminActionBar, AdminActionButton } from '@/components/admin';
 import { PageHeader } from '@/components/ui/app/PageHeader';
 import { DataTable } from '@/components/ui/app/DataTable';
 import { StatusBadge } from '@/components/ui/app/StatusBadge';
@@ -18,18 +19,16 @@ const statusTone: Record<AdminArticle['status'], 'green' | 'yellow' | 'ink'> = {
   archived: 'ink',
 };
 
-/** Matches public news cards — Announcement / Guide / Event. */
 const CATEGORIES = ['Announcement', 'Guide', 'Event'];
 
 type Draft = {
-  slug: string | null; // null = creating
+  slug: string | null;
   title: string;
   excerpt: string;
   body: string;
   category: string;
   status: AdminArticle['status'];
   featured: boolean;
-  /** YYYY-MM-DD for the date shown on the public news page. */
   publishedAt: string;
   bodyReady: boolean;
 };
@@ -53,7 +52,7 @@ function toDateInput(iso: string | null | undefined) {
   return d.toISOString().slice(0, 10);
 }
 
-/** SCR-037 — Manage news & pages (CHIP-033, CHIP-035). */
+/** SCR-037 — Manage news. */
 export default function AdminNewsPage() {
   const toast = useToast();
   const [page, setPage] = useState(1);
@@ -88,7 +87,6 @@ export default function AdminNewsPage() {
       bodyReady: Boolean(article.bodyRaw),
     });
 
-    // List rows omit body — load the full article so edits keep content.
     if (!article.bodyRaw) {
       try {
         const full = await adminApi.getArticle(article.slug);
@@ -117,8 +115,6 @@ export default function AdminNewsPage() {
     setIsSaving(true);
 
     try {
-      // Date-only → UTC midnight (not noon). Noon UTC hid "today" posts for
-      // morning publishes (e.g. IST) because published_at was still in the future.
       const publishedAt = draft.publishedAt
         ? new Date(`${draft.publishedAt}T00:00:00.000Z`).toISOString()
         : undefined;
@@ -187,8 +183,8 @@ export default function AdminNewsPage() {
   return (
     <div className="space-y-8">
       <PageHeader
-        eyebrow="Administration"
-        title="News & pages"
+        eyebrow="Content"
+        title="News"
         lede="Publish announcements, guides and event posts for the public site."
         actions={
           <button type="button" className="btn-primary text-sm" onClick={() => void openEditor()}>
@@ -199,88 +195,90 @@ export default function AdminNewsPage() {
 
       {draft ? (
         <Reveal>
-          <form onSubmit={handleSave} className="card space-y-4 p-5 sm:p-6">
+          <form onSubmit={handleSave} className="rounded-card border border-line bg-surface p-5 shadow-soft sm:p-6">
             <h2 className="font-display text-lg font-bold text-aubergine">
               {draft.slug ? `Editing: ${draft.slug}` : 'New article'}
             </h2>
 
-            <FieldShell label="Title" hint="Shown as the headline on the news page">
-              <TextInput value={draft.title} onChange={(e) => update('title', e.target.value)} required />
-            </FieldShell>
-
-            <FieldShell label="Excerpt" hint="Shown on news cards and under the title on the article page">
-              <TextTextarea
-                rows={2}
-                value={draft.excerpt}
-                onChange={(e) => update('excerpt', e.target.value)}
-              />
-            </FieldShell>
-
-            <FieldShell
-              label="Body"
-              hint={
-                draft.bodyReady
-                  ? 'Separate paragraphs with a blank line — each becomes a paragraph on the article page'
-                  : 'Loading article body…'
-              }
-            >
-              <TextTextarea
-                rows={8}
-                value={draft.body}
-                onChange={(e) => update('body', e.target.value)}
-                disabled={!draft.bodyReady}
-              />
-            </FieldShell>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <FieldShell label="Category" hint="Badge on the public news list and article">
-                <TextSelect value={draft.category} onChange={(e) => update('category', e.target.value)}>
-                  {CATEGORIES.map((category) => (
-                    <option key={category} value={category}>
-                      {category}
-                    </option>
-                  ))}
-                </TextSelect>
+            <div className="mt-4 space-y-4">
+              <FieldShell label="Title" hint="Shown as the headline on the news page">
+                <TextInput value={draft.title} onChange={(e) => update('title', e.target.value)} required />
               </FieldShell>
 
-              <FieldShell label="Status">
-                <TextSelect
-                  value={draft.status}
-                  onChange={(e) => update('status', e.target.value as AdminArticle['status'])}
-                >
-                  <option value="draft">Draft</option>
-                  <option value="published">Published</option>
-                  <option value="archived">Archived</option>
-                </TextSelect>
-              </FieldShell>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <FieldShell
-                label="Publish date"
-                hint="Date shown on the public news page (leave blank to use publish time)"
-              >
-                <TextInput
-                  type="date"
-                  value={draft.publishedAt}
-                  onChange={(e) => update('publishedAt', e.target.value)}
+              <FieldShell label="Excerpt" hint="Shown on news cards and under the title on the article page">
+                <TextTextarea
+                  rows={2}
+                  value={draft.excerpt}
+                  onChange={(e) => update('excerpt', e.target.value)}
                 />
               </FieldShell>
 
-              <FieldShell label="Featured" hint="Mark this post as featured in content feeds">
-                <label className="mt-2 flex cursor-pointer items-center gap-2.5 text-sm text-muted">
-                  <input
-                    type="checkbox"
-                    checked={draft.featured}
-                    onChange={(e) => update('featured', e.target.checked)}
-                    className="h-4 w-4 rounded-field border-line accent-coral"
-                  />
-                  Show as featured
-                </label>
+              <FieldShell
+                label="Body"
+                hint={
+                  draft.bodyReady
+                    ? 'Separate paragraphs with a blank line — each becomes a paragraph on the article page'
+                    : 'Loading article body…'
+                }
+              >
+                <TextTextarea
+                  rows={8}
+                  value={draft.body}
+                  onChange={(e) => update('body', e.target.value)}
+                  disabled={!draft.bodyReady}
+                />
               </FieldShell>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <FieldShell label="Category" hint="Badge on the public news list and article">
+                  <TextSelect value={draft.category} onChange={(e) => update('category', e.target.value)}>
+                    {CATEGORIES.map((category) => (
+                      <option key={category} value={category}>
+                        {category}
+                      </option>
+                    ))}
+                  </TextSelect>
+                </FieldShell>
+
+                <FieldShell label="Status">
+                  <TextSelect
+                    value={draft.status}
+                    onChange={(e) => update('status', e.target.value as AdminArticle['status'])}
+                  >
+                    <option value="draft">Draft</option>
+                    <option value="published">Published</option>
+                    <option value="archived">Archived</option>
+                  </TextSelect>
+                </FieldShell>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <FieldShell
+                  label="Publish date"
+                  hint="Date shown on the public news page (leave blank to use publish time)"
+                >
+                  <TextInput
+                    type="date"
+                    value={draft.publishedAt}
+                    onChange={(e) => update('publishedAt', e.target.value)}
+                  />
+                </FieldShell>
+
+                <FieldShell label="Featured" hint="Mark this post as featured in content feeds">
+                  <label className="mt-2 flex cursor-pointer items-center gap-2.5 text-sm text-muted">
+                    <input
+                      type="checkbox"
+                      checked={draft.featured}
+                      onChange={(e) => update('featured', e.target.checked)}
+                      className="h-4 w-4 rounded-field border-line accent-coral"
+                    />
+                    Show as featured
+                  </label>
+                </FieldShell>
+              </div>
             </div>
 
-            <div className="flex flex-wrap gap-3 border-t border-line pt-4">
+            <div className="mt-5 flex flex-wrap gap-3 border-t border-line pt-4">
               <SubmitButton
                 isLoading={isSaving}
                 loadingLabel="Saving…"
@@ -343,32 +341,17 @@ export default function AdminNewsPage() {
                   if (!original) return null;
                   const busy = busySlug === row.slug;
                   return (
-                    <div className="flex flex-wrap gap-1.5">
-                      <button
-                        type="button"
-                        disabled={busy}
-                        className="rounded-field border border-line px-2 py-1 text-[0.7rem] font-semibold text-muted hover:bg-periwinkle-tint/50 disabled:opacity-40"
-                        onClick={() => void openEditor(original)}
-                      >
+                    <AdminActionBar>
+                      <AdminActionButton disabled={busy} onClick={() => void openEditor(original)}>
                         Edit
-                      </button>
-                      <button
-                        type="button"
-                        disabled={busy}
-                        className="rounded-field border border-line px-2 py-1 text-[0.7rem] font-semibold text-muted hover:bg-periwinkle-tint/50 disabled:opacity-40"
-                        onClick={() => void togglePublish(original)}
-                      >
+                      </AdminActionButton>
+                      <AdminActionButton disabled={busy} onClick={() => void togglePublish(original)}>
                         {row.status === 'published' ? 'Unpublish' : 'Publish'}
-                      </button>
-                      <button
-                        type="button"
-                        disabled={busy}
-                        className="rounded-field border border-deep-coral/40 bg-coral/10 px-2 py-1 text-[0.7rem] font-semibold text-deep-coral hover:bg-coral/20 disabled:opacity-40"
-                        onClick={() => void handleDelete(original)}
-                      >
+                      </AdminActionButton>
+                      <AdminActionButton tone="danger" disabled={busy} onClick={() => void handleDelete(original)}>
                         Delete
-                      </button>
-                    </div>
+                      </AdminActionButton>
+                    </AdminActionBar>
                   );
                 },
               },
