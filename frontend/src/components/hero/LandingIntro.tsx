@@ -38,11 +38,13 @@ export default function LandingIntro() {
         const hold = isMobile ? 0.48 : 0.52;
         const span = isMobile ? 0.4 : 0.28;
 
+        // Same aubergine → coral colour blend as before; scrub synced with chip
+        // so the page doesn't hitch while colours stay identical.
         ScrollTrigger.create({
           trigger: stage,
           start: 'top top',
           end: 'bottom bottom',
-          scrub: isMobile ? 0.85 : 0.65,
+          scrub: isMobile ? 0.4 : 0.55,
           onUpdate: (self) => {
             const t = gsap.utils.clamp(0, 1, (self.progress - hold) / span);
             const s = t * t * (3 - 2 * t);
@@ -65,12 +67,12 @@ export default function LandingIntro() {
       <div className="pointer-events-none absolute inset-0 z-0 bg-coral" aria-hidden />
       <div
         ref={aubergineRef}
-        className="pointer-events-none absolute inset-0 z-0 bg-aubergine"
+        className="pointer-events-none absolute inset-0 z-0 bg-aubergine will-change-[opacity]"
         aria-hidden
       />
       {/* Soft light wash so the glass chip reads on both grounds */}
       <div
-        className="pointer-events-none absolute inset-0 z-0 opacity-40"
+        className="pointer-events-none absolute inset-0 z-0 opacity-40 transform-gpu"
         style={{
           background:
             'radial-gradient(70% 55% at 72% 42%, rgba(255,252,249,0.14) 0%, transparent 58%), radial-gradient(50% 40% at 20% 80%, rgba(252,113,71,0.12) 0%, transparent 55%)',

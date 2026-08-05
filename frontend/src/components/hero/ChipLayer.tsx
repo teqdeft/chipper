@@ -23,12 +23,6 @@ const ABOUT_START_FRAME = 0.32; // enter About mid-orbit
 const EXIT_FRAME = 1; // last plate — keep turning until the chip leaves
 
 /**
- * Light ease only — heavy smoothing + high scrub stacked lag so the chip
- * kept drifting after the wheel stopped.
- */
-const FRAME_SMOOTHING = 0.35;
-
-/**
  * Sticky chip over the intro stage.
  * Aligned in the right content column (not flush to the viewport edge).
  * Scroll rotates frames through Hero + full About until exit.
@@ -40,7 +34,6 @@ export default function ChipLayer({ stageRef }: ChipLayerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imagesRef = useRef<HTMLImageElement[]>([]);
   const loadedRef = useRef<boolean[]>([]);
-  const displayProgressRef = useRef(HERO_FRAME);
   const lastDrawnRef = useRef(-1);
   const rafRef = useRef(0);
   const [ready, setReady] = useState(false);
@@ -60,11 +53,12 @@ export default function ChipLayer({ stageRef }: ChipLayerProps) {
     let disposed = false;
 
     /**
-     * One frame only — alpha-crossfading transparent plates caused scroll blink.
-     * Progress is smoothed in `tick`, then we paint the nearest loaded frame.
+     * One plate only. Track the *actual* drawn index so a fallback plate gets
+     * replaced the moment the real frame finishes loading (first-scroll glitter).
      */
     const draw = (index: number) => {
       const clamped = Math.max(0, Math.min(FRAME_COUNT - 1, index));
+      let drawn = clamped;
       let img = imagesRef.current[clamped];
       if (!img || !loadedRef.current[clamped]) {
         let found = -1;
@@ -79,11 +73,11 @@ export default function ChipLayer({ stageRef }: ChipLayerProps) {
           }
         }
         if (found === -1) return;
+        drawn = found;
         img = imagesRef.current[found];
       }
 
-      // Same plate already on screen — skip clear/draw (avoids flicker).
-      if (clamped === lastDrawnRef.current && loadedRef.current[clamped]) return;
+      if (drawn === lastDrawnRef.current) return;
 
       const cw = canvas.width;
       const ch = canvas.height;
@@ -104,7 +98,7 @@ export default function ChipLayer({ stageRef }: ChipLayerProps) {
       const dy = (ch - dh) / 2;
       ctx.globalAlpha = 1;
       ctx.drawImage(img, dx, dy, dw, dh);
-      lastDrawnRef.current = clamped;
+      lastDrawnRef.current = drawn;
     };
 
     const resize = () => {
@@ -115,9 +109,8 @@ export default function ChipLayer({ stageRef }: ChipLayerProps) {
       canvas.height = Math.round(rect.height * dpr);
       canvas.style.width = `${rect.width}px`;
       canvas.style.height = `${rect.height}px`;
-      const cur = lastDrawnRef.current < 0 ? 0 : lastDrawnRef.current;
       lastDrawnRef.current = -1;
-      draw(cur);
+      draw(Math.round(heroScroll.progress * (FRAME_COUNT - 1)));
     };
 
     const loadOne = (i: number) =>
@@ -125,33 +118,62 @@ export default function ChipLayer({ stageRef }: ChipLayerProps) {
         const img = new Image();
         img.decoding = 'async';
         img.onload = () => {
-          loadedRef.current[i] = true;
-          imagesRef.current[i] = img;
-          if (i === 0 && !disposed) {
-            setReady(true);
-            resize();
+          const finish = () => {
+            if (disposed) return;
+            loadedRef.current[i] = true;
+            imagesRef.current[i] = img;
+            if (i === 0) {
+              setReady(true);
+              resize();
+            } else {
+              // Swap in the real plate if the scrub is waiting on this frame.
+              const current = Math.round(heroScroll.progress * (FRAME_COUNT - 1));
+              if (i === current) {
+                lastDrawnRef.current = -1;
+                draw(current);
+              }
+            }
+            resolve();
+          };
+          // decode() avoids first-paint glitter when the browser still rasterizes.
+          if (typeof img.decode === 'function') {
+            void img.decode().then(finish).catch(finish);
+          } else {
+            finish();
           }
-          resolve();
         };
         img.onerror = () => resolve();
         img.src = framePath(i);
       });
 
-    void loadOne(0).then(() => {
-      for (let i = 1; i < FRAME_COUNT; i++) void loadOne(i);
-    });
+    // Warm plates before the first Hero→About pass (that pass glittered when
+    // frames were still decoding; the return scroll felt fine because of cache).
+    const warmFrames = async () => {
+      await loadOne(0);
+      if (disposed) return;
+      const CONCURRENCY = 10;
+      const heroWarm = Math.min(FRAME_COUNT, 56);
+      for (let start = 1; start < heroWarm; start += CONCURRENCY) {
+        const batch: Promise<void>[] = [];
+        for (let i = start; i < Math.min(start + CONCURRENCY, heroWarm); i++) {
+          batch.push(loadOne(i));
+        }
+        await Promise.all(batch);
+        if (disposed) return;
+      }
+      for (let start = heroWarm; start < FRAME_COUNT; start += CONCURRENCY) {
+        const batch: Promise<void>[] = [];
+        for (let i = start; i < Math.min(start + CONCURRENCY, FRAME_COUNT); i++) {
+          batch.push(loadOne(i));
+        }
+        await Promise.all(batch);
+        if (disposed) return;
+      }
+    };
+    void warmFrames();
 
-    let lastTime = performance.now();
-    const tick = (now: number) => {
-      // Frame-rate independent damping so 60/120Hz both feel equally silky.
-      const dt = Math.min(0.05, (now - lastTime) / 1000);
-      lastTime = now;
-      const alpha = 1 - Math.pow(1 - FRAME_SMOOTHING, dt * 60);
-      const target = heroScroll.progress;
-      const cur = displayProgressRef.current;
-      const next = cur + (target - cur) * alpha;
-      displayProgressRef.current = Math.abs(target - next) < 0.00008 ? target : next;
-      draw(Math.round(displayProgressRef.current * (FRAME_COUNT - 1)));
+    const tick = () => {
+      draw(Math.round(heroScroll.progress * (FRAME_COUNT - 1)));
       rafRef.current = requestAnimationFrame(tick);
     };
     rafRef.current = requestAnimationFrame(tick);
@@ -180,7 +202,6 @@ export default function ChipLayer({ stageRef }: ChipLayerProps) {
 
     if (reduced) {
       heroScroll.progress = ABOUT_START_FRAME;
-      displayProgressRef.current = ABOUT_START_FRAME;
       gsap.set(frame, {
         yPercent: 0,
         scale: 1,
@@ -192,7 +213,6 @@ export default function ChipLayer({ stageRef }: ChipLayerProps) {
     }
 
     heroScroll.progress = HERO_FRAME;
-    displayProgressRef.current = HERO_FRAME;
 
     const mm = gsap.matchMedia();
 
@@ -203,8 +223,8 @@ export default function ChipLayer({ stageRef }: ChipLayerProps) {
       },
       (ctx) => {
         const { isMobile } = ctx.conditions as { isMobile: boolean };
-        // Low scrub = tight to the wheel; stop scrolling → chip stops with it.
-        const scrub = isMobile ? 0.25 : 0.35;
+        // Keep in sync with LandingIntro bg scrub so About page scroll feels even.
+        const scrub = isMobile ? 0.4 : 0.55;
 
         // Hero band: first stretch of the turntable (ends as About enters).
         ScrollTrigger.create({
@@ -305,10 +325,19 @@ export default function ChipLayer({ stageRef }: ChipLayerProps) {
                 ready ? 'opacity-100' : 'opacity-0',
               )}
             >
-              <canvas
-                ref={canvasRef}
-                className="h-full w-full [filter:drop-shadow(0_28px_55px_rgba(69,8,31,0.28))]"
+              {/*
+               * Same aubergine cast as the old drop-shadow, without filter: on the
+               * moving canvas (that was hitching About page scroll).
+               */}
+              <div
+                className="pointer-events-none absolute inset-[8%] rounded-[45%] opacity-70"
+                style={{
+                  background:
+                    'radial-gradient(50% 45% at 50% 58%, rgba(69,8,31,0.34) 0%, rgba(69,8,31,0.12) 42%, transparent 70%)',
+                }}
+                aria-hidden
               />
+              <canvas ref={canvasRef} className="relative h-full w-full" />
             </div>
           </div>
         </div>

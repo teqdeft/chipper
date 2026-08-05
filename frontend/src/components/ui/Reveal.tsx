@@ -46,8 +46,9 @@ export function Reveal({
       className={className}
       initial={{ opacity: 0, y }}
       whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: '0px 0px -10% 0px', amount: 0.15 }}
-      transition={{ duration: 0.7, delay, ease: premiumEase }}
+      // Start a bit earlier so first Hero→About entry isn't a sudden cascade.
+      viewport={{ once: true, margin: '0px 0px -4% 0px', amount: 0.2 }}
+      transition={{ duration: 0.55, delay, ease: premiumEase }}
       {...rest}
     >
       {children}
@@ -79,7 +80,7 @@ export function RevealGroup({
       variants={container}
       initial="hidden"
       whileInView="show"
-      viewport={{ once: true, margin: '0px 0px -10% 0px', amount: 0.12 }}
+      viewport={{ once: true, margin: '0px 0px -4% 0px', amount: 0.15 }}
     >
       {children}
     </motion.div>
@@ -87,11 +88,11 @@ export function RevealGroup({
 }
 
 export const revealItem: Variants = {
-  hidden: { opacity: 0, y: 22 },
+  hidden: { opacity: 0, y: 12 },
   show: {
     opacity: 1,
     y: 0,
-    transition: { duration: 0.65, ease: premiumEase },
+    transition: { duration: 0.5, ease: premiumEase },
   },
 };
 

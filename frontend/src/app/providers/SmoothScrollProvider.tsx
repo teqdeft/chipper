@@ -22,14 +22,16 @@ export default function SmoothScrollProvider({ children }: { children: ReactNode
     }
 
     const lenis = new Lenis({
-      duration: 1.1,
-      easing: (t: number) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+      // Even page glide through About — duration short enough to stay responsive.
+      duration: 1.15,
+      easing: (t: number) => 1 - Math.pow(1 - t, 3),
       smoothWheel: true,
       // Critical: leave touch to the browser so vertical page scroll and
       // horizontal overflow sliders both work with the thumb.
       syncTouch: false,
       wheelMultiplier: 1,
       gestureOrientation: 'vertical',
+      touchMultiplier: 1.2,
     });
 
     lenis.on('scroll', ScrollTrigger.update);
