@@ -14,18 +14,24 @@ const FRAME_COUNT = 120;
 const framePath = (i: number) => `/frames/chip/f-${String(i + 1).padStart(3, '0')}.webp`;
 
 /**
- * Frame progress targets (0–1 of the turntable):
- * - Hero opens near the start, then scrolls through a clear orbit
- * - About settles mid-orbit (diagonal / turned) — NOT near loop end,
- *   which reads as “seedhi” / front-on again
+ * Split the turntable across Hero vs About so About still has a full
+ * continuing orbit — Hero used to burn almost every frame before About
+ * started, which felt like a mid-section freeze.
  */
-const HERO_FRAME = 0.02; // ~frame 3 — opening pose, full channel layout front-on
-const ABOUT_FRAME = 0.58; // ~frame 69 — strong diagonal / side settle
+const HERO_FRAME = 0.02;
+const ABOUT_START_FRAME = 0.32; // enter About mid-orbit
+const EXIT_FRAME = 1; // last plate — keep turning until the chip leaves
+
+/**
+ * Light ease only — heavy smoothing + high scrub stacked lag so the chip
+ * kept drifting after the wheel stopped.
+ */
+const FRAME_SMOOTHING = 0.35;
 
 /**
  * Sticky chip over the intro stage.
  * Aligned in the right content column (not flush to the viewport edge).
- * Scroll rotates frames so About receives a side-angle settle.
+ * Scroll rotates frames through Hero + full About until exit.
  */
 export default function ChipLayer({ stageRef }: ChipLayerProps) {
   const reduced = useReducedMotion();
@@ -34,6 +40,7 @@ export default function ChipLayer({ stageRef }: ChipLayerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imagesRef = useRef<HTMLImageElement[]>([]);
   const loadedRef = useRef<boolean[]>([]);
+  const displayProgressRef = useRef(HERO_FRAME);
   const lastDrawnRef = useRef(-1);
   const rafRef = useRef(0);
   const [ready, setReady] = useState(false);
@@ -52,6 +59,10 @@ export default function ChipLayer({ stageRef }: ChipLayerProps) {
     loadedRef.current = new Array(FRAME_COUNT).fill(false);
     let disposed = false;
 
+    /**
+     * One frame only — alpha-crossfading transparent plates caused scroll blink.
+     * Progress is smoothed in `tick`, then we paint the nearest loaded frame.
+     */
     const draw = (index: number) => {
       const clamped = Math.max(0, Math.min(FRAME_COUNT - 1, index));
       let img = imagesRef.current[clamped];
@@ -71,6 +82,9 @@ export default function ChipLayer({ stageRef }: ChipLayerProps) {
         img = imagesRef.current[found];
       }
 
+      // Same plate already on screen — skip clear/draw (avoids flicker).
+      if (clamped === lastDrawnRef.current && loadedRef.current[clamped]) return;
+
       const cw = canvas.width;
       const ch = canvas.height;
       ctx.clearRect(0, 0, cw, ch);
@@ -88,6 +102,7 @@ export default function ChipLayer({ stageRef }: ChipLayerProps) {
       }
       const dx = (cw - dw) / 2;
       const dy = (ch - dh) / 2;
+      ctx.globalAlpha = 1;
       ctx.drawImage(img, dx, dy, dw, dh);
       lastDrawnRef.current = clamped;
     };
@@ -126,9 +141,17 @@ export default function ChipLayer({ stageRef }: ChipLayerProps) {
       for (let i = 1; i < FRAME_COUNT; i++) void loadOne(i);
     });
 
-    const tick = () => {
-      const target = Math.round(heroScroll.progress * (FRAME_COUNT - 1));
-      if (target !== lastDrawnRef.current) draw(target);
+    let lastTime = performance.now();
+    const tick = (now: number) => {
+      // Frame-rate independent damping so 60/120Hz both feel equally silky.
+      const dt = Math.min(0.05, (now - lastTime) / 1000);
+      lastTime = now;
+      const alpha = 1 - Math.pow(1 - FRAME_SMOOTHING, dt * 60);
+      const target = heroScroll.progress;
+      const cur = displayProgressRef.current;
+      const next = cur + (target - cur) * alpha;
+      displayProgressRef.current = Math.abs(target - next) < 0.00008 ? target : next;
+      draw(Math.round(displayProgressRef.current * (FRAME_COUNT - 1)));
       rafRef.current = requestAnimationFrame(tick);
     };
     rafRef.current = requestAnimationFrame(tick);
@@ -156,19 +179,20 @@ export default function ChipLayer({ stageRef }: ChipLayerProps) {
     gsap.set(frame, { transformPerspective: 1400, transformOrigin: '50% 50%' });
 
     if (reduced) {
-      heroScroll.progress = ABOUT_FRAME;
+      heroScroll.progress = ABOUT_START_FRAME;
+      displayProgressRef.current = ABOUT_START_FRAME;
       gsap.set(frame, {
         yPercent: 0,
         scale: 1,
         xPercent: 0,
-        rotateY: -16,
-        rotateZ: -10,
+        rotateY: -8,
+        rotateZ: 0,
       });
       return;
     }
 
-    // Start on the opening pose, not frame 0 freeze after refresh mid-page.
     heroScroll.progress = HERO_FRAME;
+    displayProgressRef.current = HERO_FRAME;
 
     const mm = gsap.matchMedia();
 
@@ -179,23 +203,30 @@ export default function ChipLayer({ stageRef }: ChipLayerProps) {
       },
       (ctx) => {
         const { isMobile } = ctx.conditions as { isMobile: boolean };
+        // Low scrub = tight to the wheel; stop scrolling → chip stops with it.
+        const scrub = isMobile ? 0.25 : 0.35;
 
+        // Hero band: first stretch of the turntable (ends as About enters).
         ScrollTrigger.create({
-          trigger: stage,
+          trigger: '#hero',
           start: 'top top',
           end: 'bottom bottom',
-          scrub: isMobile ? 0.3 : 0.4,
+          scrub,
           onUpdate: (self) => {
-            const p = self.progress;
-            /*
-             * Orbit runs the *whole* stage, linearly. It used to finish at 0.68
-             * on a smoothstep — which decelerated to a standstill and then froze
-             * for the last third, so the chip sat dead still through most of
-             * About ("What is an organ-on-a-chip"). Linear keeps a constant
-             * degrees-per-pixel turn all the way down; the scrub below supplies
-             * the easing, so it still lands softly rather than reading mechanical.
-             */
-            heroScroll.progress = HERO_FRAME + (ABOUT_FRAME - HERO_FRAME) * p;
+            heroScroll.progress = gsap.utils.interpolate(HERO_FRAME, ABOUT_START_FRAME, self.progress);
+          },
+        });
+
+        // About → stage exit: remaining plates play through to the last frame
+        // before the chip slides under Platform. No overlap with the hero ST.
+        ScrollTrigger.create({
+          trigger: '#about',
+          start: 'top bottom',
+          endTrigger: stage,
+          end: 'bottom bottom',
+          scrub,
+          onUpdate: (self) => {
+            heroScroll.progress = gsap.utils.interpolate(ABOUT_START_FRAME, EXIT_FRAME, self.progress);
           },
         });
 
@@ -204,21 +235,16 @@ export default function ChipLayer({ stageRef }: ChipLayerProps) {
             trigger: stage,
             start: 'top top',
             end: 'bottom bottom',
-            scrub: isMobile ? 0.4 : 0.55,
+            scrub,
           },
         });
 
-        // Hero: balanced with left copy + light yaw.
-        // Idle rotateZ must stay 0 — any negative Z rolls the plate so the
-        // right edge reads lifted off the X-axis.
-        // xPercent stays negative on desktop — a rightward nudge past 0 pushes
-        // the plate past the viewport and opens a white strip beside aubergine.
+        // rotateZ stays 0 — any roll lifts the right edge off the X-axis.
         tl.fromTo(
           frame,
           {
             yPercent: isMobile ? 2 : 0,
             scale: 1,
-            // Laptop+: sit further into the right column. Clip handles edge spill.
             xPercent: isMobile ? 0 : 4,
             rotateY: isMobile ? -2 : -4,
             rotateZ: 0,
@@ -227,27 +253,27 @@ export default function ChipLayer({ stageRef }: ChipLayerProps) {
             yPercent: isMobile ? -2 : 2,
             scale: isMobile ? 0.94 : 0.96,
             xPercent: isMobile ? 2 : 5,
-            rotateY: isMobile ? -10 : -14,
-            rotateZ: isMobile ? -6 : -8,
+            rotateY: isMobile ? -8 : -10,
+            rotateZ: 0,
             ease: 'none',
-            duration: 0.58,
+            duration: 0.55,
           },
           0,
         );
 
-        // About: more turn — frame angle + extra right yaw so it never reads flat.
+        // About → exit: stay level on X; only mild yaw + scale as it leaves.
         tl.to(
           frame,
           {
-            yPercent: isMobile ? -8 : 8,
+            yPercent: isMobile ? -6 : 6,
             scale: isMobile ? 0.84 : 0.88,
             xPercent: isMobile ? 2 : 6,
-            rotateY: isMobile ? -18 : -24,
-            rotateZ: isMobile ? -10 : -14,
+            rotateY: isMobile ? -12 : -14,
+            rotateZ: 0,
             ease: 'none',
-            duration: 0.42,
+            duration: 0.45,
           },
-          0.58,
+          0.55,
         );
 
         requestAnimationFrame(() => ScrollTrigger.refresh());
@@ -270,25 +296,11 @@ export default function ChipLayer({ stageRef }: ChipLayerProps) {
         <div className="container-content flex w-full min-w-0 justify-center md:justify-end">
           <div
             ref={frameRef}
-            /*
-             * The percentage binds here, not the rem cap: container-content is
-             * 1200px, so after gutters the box is ~1104px and 46% came out to
-             * ~508px — small for a hero product shot.
-             *
-             * Only xl grows. Every narrower tier shares its column with the
-             * headline and has nothing to give: md is barely wider than
-             * max-w-xl, and lg is worse, since the headline jumps to max-w-2xl
-             * at 1024 while the container is still short of its 1200 cap. Real
-             * headroom only appears once the container tops out, so the extra
-             * width waits for xl.
-             */
             className="relative flex w-full max-w-[min(94vw,34rem)] items-center justify-center will-change-transform md:w-[min(48%,32rem)] md:max-w-[32rem] lg:w-[min(52%,37rem)] lg:max-w-[37rem] xl:w-[min(58%,42rem)] xl:max-w-[42rem]"
           >
             <div
               ref={wrapRef}
               className={cn(
-                // Matches the 1160×640 source plates — a square box would leave
-                // 44% of the canvas buffer empty and paint nothing into it.
                 'relative aspect-[29/16] w-full transition-opacity duration-700 ease-premium',
                 ready ? 'opacity-100' : 'opacity-0',
               )}

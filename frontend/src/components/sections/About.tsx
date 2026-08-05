@@ -13,7 +13,7 @@ export default function About() {
       id="about"
       tone="canvas"
       ariaLabel="What is an organ-on-a-chip"
-      className="relative !bg-transparent pb-24 pt-10 text-aubergine sm:pb-28 sm:pt-16 md:pb-36"
+      className="relative min-h-[110vh] !bg-transparent pb-24 pt-10 text-aubergine sm:min-h-[120vh] sm:pb-28 sm:pt-16 md:min-h-[130vh] md:pb-36"
     >
       <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.95fr)] lg:items-center lg:gap-16 xl:gap-20">
         <div className="relative max-w-xl">
