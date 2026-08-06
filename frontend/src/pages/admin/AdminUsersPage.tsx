@@ -5,7 +5,6 @@ import {
   AdminFilterSelect,
   AdminSearchField,
   AdminToolbar,
-  AdminToolbarButton,
 } from '@/components/admin';
 import { PageHeader } from '@/components/ui/app/PageHeader';
 import { DataTable } from '@/components/ui/app/DataTable';
@@ -14,6 +13,7 @@ import { TextSelect } from '@/components/ui/app/FormField';
 import { ErrorState, LoadingState } from '@/components/ui/app/LoadingState';
 import { Pagination } from '@/components/ui/app/Pagination';
 import { useApiResource } from '@/hooks/useApiResource';
+import { useLiveSearch } from '@/hooks/useLiveSearch';
 import { useToast } from '@/app/providers/ToastProvider';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { AWARDABLE_BADGES, adminApi } from '@/lib/api/admin';
@@ -42,8 +42,7 @@ export default function AdminUsersPage() {
   const toast = useToast();
   const { user: me } = useAuth();
 
-  const [search, setSearch] = useState('');
-  const [submittedSearch, setSubmittedSearch] = useState('');
+  const search = useLiveSearch();
   const [roleFilter, setRoleFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [page, setPage] = useState(1);
@@ -54,11 +53,11 @@ export default function AdminUsersPage() {
       adminApi.users({
         page,
         limit: 20,
-        search: submittedSearch || undefined,
+        search: search.query || undefined,
         role: (roleFilter || undefined) as Role | undefined,
         status: (statusFilter || undefined) as UserStatus | undefined,
       }),
-    [page, submittedSearch, roleFilter, statusFilter],
+    [page, search.query, roleFilter, statusFilter],
   );
 
   function patchRow(updated: AdminUser) {
@@ -127,13 +126,20 @@ export default function AdminUsersPage() {
         onSubmit={(e) => {
           e.preventDefault();
           setPage(1);
-          setSubmittedSearch(search);
+          search.flush();
         }}
       >
         <AdminSearchField
           placeholder="Search name, handle, email…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          value={search.value}
+          onChange={(e) => {
+            setPage(1);
+            search.setValue(e.target.value);
+          }}
+          onClear={() => {
+            setPage(1);
+            search.clear();
+          }}
           aria-label="Search users"
         />
         <AdminFilterSelect
@@ -166,7 +172,6 @@ export default function AdminUsersPage() {
             </option>
           ))}
         </AdminFilterSelect>
-        <AdminToolbarButton>Search</AdminToolbarButton>
       </AdminToolbar>
 
       {isLoading ? (

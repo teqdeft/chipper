@@ -127,7 +127,6 @@ export default function AdminModerationPage() {
 
       <AdminToolbar>
         <AdminFilterSelect
-          className="w-36"
           value={statusFilter}
           onChange={(e) => {
             setPage(1);

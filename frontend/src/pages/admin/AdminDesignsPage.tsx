@@ -6,7 +6,6 @@ import {
   AdminFilterSelect,
   AdminSearchField,
   AdminToolbar,
-  AdminToolbarButton,
 } from '@/components/admin';
 import { PageHeader } from '@/components/ui/app/PageHeader';
 import { DataTable } from '@/components/ui/app/DataTable';
@@ -14,6 +13,7 @@ import { StatusBadge } from '@/components/ui/app/StatusBadge';
 import { ErrorState, LoadingState } from '@/components/ui/app/LoadingState';
 import { Pagination } from '@/components/ui/app/Pagination';
 import { useApiResource } from '@/hooks/useApiResource';
+import { useLiveSearch } from '@/hooks/useLiveSearch';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { useToast } from '@/app/providers/ToastProvider';
 import { adminApi } from '@/lib/api/admin';
@@ -41,8 +41,7 @@ export default function AdminDesignsPage() {
   const { hasPermission } = useAuth();
   const canDelete = hasPermission('design.delete.any');
 
-  const [search, setSearch] = useState('');
-  const [submittedSearch, setSubmittedSearch] = useState('');
+  const search = useLiveSearch();
   const [statusFilter, setStatusFilter] = useState('');
   const [page, setPage] = useState(1);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -52,10 +51,10 @@ export default function AdminDesignsPage() {
       adminApi.designs({
         page,
         limit: 20,
-        search: submittedSearch || undefined,
+        search: search.query || undefined,
         status: statusFilter || undefined,
       }),
-    [page, submittedSearch, statusFilter],
+    [page, search.query, statusFilter],
   );
 
   const pendingCount = data?.items.filter((d) => d.status === 'pending').length ?? 0;
@@ -151,17 +150,23 @@ export default function AdminDesignsPage() {
         onSubmit={(e) => {
           e.preventDefault();
           setPage(1);
-          setSubmittedSearch(search);
+          search.flush();
         }}
       >
         <AdminSearchField
           placeholder="Search title, summary or author…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          value={search.value}
+          onChange={(e) => {
+            setPage(1);
+            search.setValue(e.target.value);
+          }}
+          onClear={() => {
+            setPage(1);
+            search.clear();
+          }}
           aria-label="Search designs"
         />
         <AdminFilterSelect
-          className="w-36"
           value={statusFilter}
           onChange={(e) => {
             setPage(1);
@@ -176,7 +181,6 @@ export default function AdminDesignsPage() {
             </option>
           ))}
         </AdminFilterSelect>
-        <AdminToolbarButton>Search</AdminToolbarButton>
       </AdminToolbar>
 
       {isLoading ? (

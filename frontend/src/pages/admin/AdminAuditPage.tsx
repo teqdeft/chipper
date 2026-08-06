@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { AdminSearchField, AdminToolbar, AdminToolbarButton } from '@/components/admin';
+import { AdminSearchField, AdminToolbar } from '@/components/admin';
 import { PageHeader } from '@/components/ui/app/PageHeader';
 import { DataTable } from '@/components/ui/app/DataTable';
 import { EmptyState } from '@/components/ui/app/EmptyState';
 import { ErrorState, LoadingState } from '@/components/ui/app/LoadingState';
 import { Pagination } from '@/components/ui/app/Pagination';
 import { useApiResource } from '@/hooks/useApiResource';
+import { useLiveSearch } from '@/hooks/useLiveSearch';
 import { adminApi } from '@/lib/api/admin';
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -172,20 +173,18 @@ function formatActionLabel(action: string): string {
 /** Staff action audit trail. */
 export default function AdminAuditPage() {
   const [page, setPage] = useState(1);
-  const [action, setAction] = useState('');
-  const [entityType, setEntityType] = useState('');
-  const [submittedAction, setSubmittedAction] = useState('');
-  const [submittedEntity, setSubmittedEntity] = useState('');
+  const action = useLiveSearch();
+  const entityType = useLiveSearch();
 
   const { data, isLoading, error, reload } = useApiResource(
     () =>
       adminApi.auditLogs({
         page,
         limit: 25,
-        action: submittedAction || undefined,
-        entityType: submittedEntity || undefined,
+        action: action.query || undefined,
+        entityType: entityType.query || undefined,
       }),
-    [page, submittedAction, submittedEntity],
+    [page, action.query, entityType.query],
   );
 
   return (
@@ -200,24 +199,37 @@ export default function AdminAuditPage() {
         onSubmit={(e) => {
           e.preventDefault();
           setPage(1);
-          setSubmittedAction(action.trim());
-          setSubmittedEntity(entityType.trim());
+          action.flush();
+          entityType.flush();
         }}
       >
         <AdminSearchField
           placeholder="Filter by action (e.g. admin.role_change)"
-          value={action}
-          onChange={(e) => setAction(e.target.value)}
+          value={action.value}
+          onChange={(e) => {
+            setPage(1);
+            action.setValue(e.target.value);
+          }}
+          onClear={() => {
+            setPage(1);
+            action.clear();
+          }}
           aria-label="Filter by action"
         />
         <AdminSearchField
-          className="sm:max-w-[14rem]"
+          className="max-w-full basis-[11rem] sm:max-w-[14rem] sm:flex-none"
           placeholder="Entity type (e.g. user)"
-          value={entityType}
-          onChange={(e) => setEntityType(e.target.value)}
+          value={entityType.value}
+          onChange={(e) => {
+            setPage(1);
+            entityType.setValue(e.target.value);
+          }}
+          onClear={() => {
+            setPage(1);
+            entityType.clear();
+          }}
           aria-label="Filter by entity type"
         />
-        <AdminToolbarButton>Filter</AdminToolbarButton>
       </AdminToolbar>
 
       {isLoading ? (

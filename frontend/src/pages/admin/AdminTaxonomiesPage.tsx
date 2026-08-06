@@ -6,7 +6,6 @@ import {
   AdminSearchField,
   AdminSection,
   AdminToolbar,
-  AdminToolbarButton,
 } from '@/components/admin';
 import { PageHeader } from '@/components/ui/app/PageHeader';
 import { DataTable } from '@/components/ui/app/DataTable';
@@ -15,6 +14,7 @@ import { StatusBadge } from '@/components/ui/app/StatusBadge';
 import { EmptyState } from '@/components/ui/app/EmptyState';
 import { ErrorState, LoadingState } from '@/components/ui/app/LoadingState';
 import { useApiResource } from '@/hooks/useApiResource';
+import { useLiveSearch } from '@/hooks/useLiveSearch';
 import { useToast } from '@/app/providers/ToastProvider';
 import { adminApi } from '@/lib/api/admin';
 import type {
@@ -120,8 +120,7 @@ export default function AdminTaxonomiesPage() {
   const toast = useToast();
   const [active, setActive] = useState<TaxonomyTable>('component_types');
   const [scope, setScope] = useState('');
-  const [searchInput, setSearchInput] = useState('');
-  const [search, setSearch] = useState('');
+  const search = useLiveSearch();
   const [includeInactive, setIncludeInactive] = useState(false);
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
   const [isSaving, setIsSaving] = useState(false);
@@ -148,16 +147,15 @@ export default function AdminTaxonomiesPage() {
       adminApi.taxonomyItems(active, {
         componentType: meta.scoped ? scope : undefined,
         includeInactive,
-        search: search || undefined,
+        search: search.query || undefined,
       }),
-    [active, scope, includeInactive, search],
+    [active, scope, includeInactive, search.query],
   );
 
   function selectTable(table: TaxonomyTable) {
     setActive(table);
     setScope('');
-    setSearch('');
-    setSearchInput('');
+    search.clear();
     setIncludeInactive(false);
     setDraft(EMPTY_DRAFT);
   }
@@ -294,12 +292,11 @@ export default function AdminTaxonomiesPage() {
           className="mb-4"
           onSubmit={(e) => {
             e.preventDefault();
-            setSearch(searchInput.trim());
+            search.flush();
           }}
         >
           {meta.scoped ? (
             <AdminFilterSelect
-              className="w-44"
               value={scope}
               onChange={(e) => setScope(e.target.value)}
               aria-label="Filter by component type"
@@ -314,13 +311,12 @@ export default function AdminTaxonomiesPage() {
           ) : null}
 
           <AdminSearchField
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
+            value={search.value}
+            onChange={(e) => search.setValue(e.target.value)}
+            onClear={search.clear}
             placeholder="Name or identifier"
             aria-label="Search taxonomy items"
           />
-
-          <AdminToolbarButton>Search</AdminToolbarButton>
 
           {meta.hardDelete ? null : (
             <label className="flex shrink-0 items-center gap-2 text-[0.75rem] font-semibold text-aubergine">

@@ -1,5 +1,4 @@
 import type { FormEvent, InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react';
-import { TextInput, TextSelect } from '@/components/ui/app/FormField';
 import { cn } from '@/lib/utils';
 
 type AdminToolbarProps = {
@@ -8,10 +7,12 @@ type AdminToolbarProps = {
   className?: string;
 };
 
-const toolbarClass =
-  'flex flex-wrap items-center gap-1.5 rounded-xl border border-line/90 bg-surface px-2.5 py-2 shadow-[0_1px_0_rgba(45,27,54,0.04)] sm:flex-nowrap';
+/** Compact control chrome — kept local so it never fights TextInput's `w-full`. */
+const controlClass =
+  'rounded-field border border-line-strong bg-canvas text-[0.8125rem] leading-5 text-aubergine outline-none transition-colors placeholder:text-muted focus:shadow-ring';
 
-const controlClass = '!py-1.5 !px-2.5 text-[0.8125rem]';
+const toolbarClass =
+  'flex w-full min-w-0 flex-wrap items-center gap-2 rounded-xl border border-line bg-surface px-2.5 py-2';
 
 /** Search + filter row shared across admin list screens. */
 export function AdminToolbar({ children, onSubmit, className }: AdminToolbarProps) {
@@ -28,19 +29,39 @@ export function AdminToolbar({ children, onSubmit, className }: AdminToolbarProp
 
 type AdminSearchFieldProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'className'> & {
   className?: string;
+  /** Clears the field immediately — shown as an × when the input has text. */
+  onClear?: () => void;
 };
 
-/** Compact search input with leading icon — matches the Users toolbar. */
-export function AdminSearchField({ className, ...props }: AdminSearchFieldProps) {
+/** Compact search input with leading icon and optional clear control. */
+export function AdminSearchField({ className, onClear, value, ...props }: AdminSearchFieldProps) {
+  const hasValue = String(value ?? '').length > 0;
+
   return (
-    <label className={cn('relative min-w-0 flex-1', className)}>
+    <label className={cn('relative min-w-[12rem] flex-1 basis-[14rem]', className)}>
       <span className="pointer-events-none absolute inset-y-0 left-2.5 flex items-center text-muted">
         <svg viewBox="0 0 16 16" fill="none" aria-hidden className="size-3.5">
           <circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.5" />
           <path d="M10.5 10.5 14 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
         </svg>
       </span>
-      <TextInput className={cn(controlClass, '!pl-8 !pr-3')} {...props} />
+      <input
+        className={cn(controlClass, 'h-9 w-full min-w-0 py-0 pl-8', hasValue && onClear ? 'pr-8' : 'pr-3')}
+        value={value}
+        {...props}
+      />
+      {hasValue && onClear ? (
+        <button
+          type="button"
+          onClick={onClear}
+          className="absolute inset-y-0 right-1.5 flex items-center px-1.5 text-muted transition-colors hover:text-aubergine"
+          aria-label="Clear search"
+        >
+          <svg viewBox="0 0 16 16" fill="none" aria-hidden className="size-3.5">
+            <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
+        </button>
+      ) : null}
     </label>
   );
 }
@@ -50,9 +71,16 @@ type AdminFilterSelectProps = SelectHTMLAttributes<HTMLSelectElement>;
 /** Compact select sized for toolbar filters. */
 export function AdminFilterSelect({ className, children, ...props }: AdminFilterSelectProps) {
   return (
-    <TextSelect className={cn('w-[8.5rem] shrink-0', controlClass, className)} {...props}>
+    <select
+      className={cn(
+        controlClass,
+        'h-9 w-auto min-w-[8.75rem] max-w-[16rem] shrink-0 px-2.5 py-0',
+        className,
+      )}
+      {...props}
+    >
       {children}
-    </TextSelect>
+    </select>
   );
 }
 
@@ -75,7 +103,7 @@ export function AdminToolbarButton({
       type={type}
       onClick={onClick}
       className={cn(
-        'shrink-0 rounded-field bg-aubergine px-3 py-1.5 text-[0.75rem] font-semibold text-canvas transition-colors hover:bg-aubergine/90',
+        'inline-flex h-9 shrink-0 items-center justify-center rounded-field bg-aubergine px-3.5 text-[0.75rem] font-semibold text-canvas transition-colors hover:bg-aubergine/90',
         className,
       )}
     >

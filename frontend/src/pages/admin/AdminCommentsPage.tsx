@@ -6,7 +6,6 @@ import {
   AdminFilterSelect,
   AdminSearchField,
   AdminToolbar,
-  AdminToolbarButton,
 } from '@/components/admin';
 import { PageHeader } from '@/components/ui/app/PageHeader';
 import { EmptyState } from '@/components/ui/app/EmptyState';
@@ -15,6 +14,7 @@ import { ErrorState, LoadingState } from '@/components/ui/app/LoadingState';
 import { Pagination } from '@/components/ui/app/Pagination';
 import { Reveal, RevealGroup, RevealItem } from '@/components/ui/Reveal';
 import { useApiResource } from '@/hooks/useApiResource';
+import { useLiveSearch } from '@/hooks/useLiveSearch';
 import { useToast } from '@/app/providers/ToastProvider';
 import { adminApi } from '@/lib/api/admin';
 import type { AdminComment } from '@/lib/api/admin';
@@ -28,8 +28,7 @@ const statusTone: Record<AdminComment['status'], 'green' | 'yellow' | 'coral'> =
 /** SCR-036 — Manage comments (CHIP-031). */
 export default function AdminCommentsPage() {
   const toast = useToast();
-  const [search, setSearch] = useState('');
-  const [submittedSearch, setSubmittedSearch] = useState('');
+  const search = useLiveSearch();
   const [statusFilter, setStatusFilter] = useState('');
   const [page, setPage] = useState(1);
   const [busyId, setBusyId] = useState<number | null>(null);
@@ -40,9 +39,9 @@ export default function AdminCommentsPage() {
         page,
         limit: 20,
         status: statusFilter || undefined,
-        search: submittedSearch || undefined,
+        search: search.query || undefined,
       }),
-    [page, statusFilter, submittedSearch],
+    [page, statusFilter, search.query],
   );
 
   async function moderate(comment: AdminComment, action: 'hide' | 'restore' | 'remove') {
@@ -83,13 +82,20 @@ export default function AdminCommentsPage() {
         onSubmit={(e) => {
           e.preventDefault();
           setPage(1);
-          setSubmittedSearch(search);
+          search.flush();
         }}
       >
         <AdminSearchField
           placeholder="Search comment text…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          value={search.value}
+          onChange={(e) => {
+            setPage(1);
+            search.setValue(e.target.value);
+          }}
+          onClear={() => {
+            setPage(1);
+            search.clear();
+          }}
           aria-label="Search comments"
         />
         <AdminFilterSelect
@@ -107,7 +113,6 @@ export default function AdminCommentsPage() {
             </option>
           ))}
         </AdminFilterSelect>
-        <AdminToolbarButton>Search</AdminToolbarButton>
       </AdminToolbar>
 
       {isLoading ? (
