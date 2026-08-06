@@ -374,14 +374,33 @@ Approving or rejecting a design notifies the uploader in-platform and by email.
 | DELETE | `/admin/pages/:slug` | Admin | Remove (system pages are protected) | CHIP-034 |
 | GET/POST | `/admin/forum/categories` | Admin | List / create | CHIP-039 |
 | PATCH/DELETE | `/admin/forum/categories/:category` | Admin | Edit / remove (must be empty) | CHIP-043 |
+| GET | `/admin/taxonomies/:table` | Admin | List a vocabulary — `?componentType=&includeInactive=&search=&limit=` | CHIP-008..015 |
 | PUT | `/admin/taxonomies/:table` | Admin | Add or edit a vocabulary item | CHIP-008..015 |
-| DELETE | `/admin/taxonomies/:table/:identifier` | Admin | Deactivate an item | CHIP-008..015 |
+| POST | `/admin/taxonomies/:table/:identifier/restore` | Admin | Reactivate a retired item | CHIP-008..015 |
+| DELETE | `/admin/taxonomies/:table/:identifier` | Admin | Deactivate an item (tags are deleted) | CHIP-008..015 |
 | GET | `/admin/settings` | Admin | All site settings | CHIP-035 |
 | PUT | `/admin/settings/:key` | Admin | Update a setting | CHIP-035 |
 | GET | `/admin/audit-logs` | Admin | Audit trail | CHIP-038 |
 
 `:table` ∈ `component_types | resource_types | organs | materials | fabrication_methods |
-model_types | licenses`.
+model_types | licenses | working_principles | component_type_fields | tags`.
+
+Notes on the taxonomy endpoints:
+
+- The list returns one shape for every table — `identifier` is whatever that table
+  keys on (slug, licence code, field key) and `note` is its free-text column,
+  whichever it is called in the schema. Unlike the public `/taxonomies` endpoint
+  it can include retired rows (`includeInactive=true`).
+- `working_principles` and `component_type_fields` hang off a component type, so
+  they take `?componentType=<slug>` on list, delete and restore, and
+  `componentType` in the upsert body. It is optional for principles (blank means
+  every type) and required for field definitions.
+- The upsert takes `expect: 'create' | 'update'` — `create` returns 409 if the
+  identifier is taken rather than silently overwriting it, `update` returns 404
+  if it is not. Omitting it keeps the plain upsert behaviour.
+- Retiring is a soft deactivate everywhere except `tags`, which have no active
+  flag: those are deleted, and only once no design or topic still points at them
+  (409 `TAG_IN_USE` otherwise).
 
 ---
 

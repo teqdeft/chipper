@@ -1,8 +1,7 @@
 import { useState } from 'react';
-import { AdminToolbar } from '@/components/admin';
+import { AdminSearchField, AdminToolbar, AdminToolbarButton } from '@/components/admin';
 import { PageHeader } from '@/components/ui/app/PageHeader';
 import { DataTable } from '@/components/ui/app/DataTable';
-import { TextInput } from '@/components/ui/app/FormField';
 import { EmptyState } from '@/components/ui/app/EmptyState';
 import { ErrorState, LoadingState } from '@/components/ui/app/LoadingState';
 import { Pagination } from '@/components/ui/app/Pagination';
@@ -205,23 +204,20 @@ export default function AdminAuditPage() {
           setSubmittedEntity(entityType.trim());
         }}
       >
-        <div className="min-w-[180px] flex-1">
-          <TextInput
-            placeholder="Filter by action (e.g. admin.role_change)"
-            value={action}
-            onChange={(e) => setAction(e.target.value)}
-          />
-        </div>
-        <div className="min-w-[160px] flex-1">
-          <TextInput
-            placeholder="Entity type (e.g. user)"
-            value={entityType}
-            onChange={(e) => setEntityType(e.target.value)}
-          />
-        </div>
-        <button type="submit" className="btn-ghost text-sm">
-          Filter
-        </button>
+        <AdminSearchField
+          placeholder="Filter by action (e.g. admin.role_change)"
+          value={action}
+          onChange={(e) => setAction(e.target.value)}
+          aria-label="Filter by action"
+        />
+        <AdminSearchField
+          className="sm:max-w-[14rem]"
+          placeholder="Entity type (e.g. user)"
+          value={entityType}
+          onChange={(e) => setEntityType(e.target.value)}
+          aria-label="Filter by entity type"
+        />
+        <AdminToolbarButton>Filter</AdminToolbarButton>
       </AdminToolbar>
 
       {isLoading ? (

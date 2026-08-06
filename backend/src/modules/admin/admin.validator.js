@@ -3,6 +3,9 @@ const c = require('../../validators/common.validator');
 const {
   ROLES, USER_STATUS, DESIGN_STATUS, REPORT_STATUS, ENTITY_TYPE, COMMENT_STATUS, CONTENT_STATUS,
 } = require('../../config/constants');
+const { TAXONOMY_TABLE_NAMES, FIELD_DATA_TYPES } = require('./taxonomy.tables');
+
+const taxonomyTable = Joi.string().valid(...TAXONOMY_TABLE_NAMES).required();
 
 module.exports = {
   listUsers: {
@@ -163,15 +166,22 @@ module.exports = {
     params: Joi.object({ category: Joi.string().trim().max(80).required() }),
   },
 
-  taxonomyUpsert: {
-    params: Joi.object({
-      table: Joi.string()
-        .valid('component_types', 'resource_types', 'organs', 'materials', 'fabrication_methods', 'model_types', 'licenses')
-        .required(),
+  taxonomyList: {
+    params: Joi.object({ table: taxonomyTable }),
+    query: Joi.object({
+      componentType: Joi.string().trim().max(64).allow(''),
+      includeInactive: Joi.boolean().default(false),
+      search: c.search,
+      limit: Joi.number().integer().min(1).max(500),
     }),
+  },
+
+  taxonomyUpsert: {
+    params: Joi.object({ table: taxonomyTable }),
     body: Joi.object({
       slug: c.slug,
       code: Joi.string().trim().max(40),
+      fieldKey: Joi.string().trim().max(64),
       name: Joi.string().trim().min(1).max(150).required(),
       note: Joi.string().trim().max(255).allow('', null),
       description: Joi.string().trim().max(255).allow('', null),
@@ -181,18 +191,31 @@ module.exports = {
       requiresAttribution: Joi.boolean(),
       allowsCommercial: Joi.boolean(),
       shareAlike: Joi.boolean(),
+      // Component-type-dependent lists (working principles, field definitions).
+      componentType: Joi.string().trim().max(64).allow('', null),
+      dataType: Joi.string().valid(...FIELD_DATA_TYPES),
+      unit: Joi.string().trim().max(32).allow('', null),
+      options: Joi.object({
+        source: Joi.string().trim().max(64),
+        values: Joi.array().items(Joi.string().trim().max(120)).max(100),
+      }).allow(null),
+      min: Joi.number().allow(null),
+      max: Joi.number().allow(null),
+      required: Joi.boolean(),
+      filterable: Joi.boolean(),
       sortOrder: Joi.number().integer().min(0),
       active: Joi.boolean(),
+      /** Turns the upsert into a checked create or update. */
+      expect: Joi.string().valid('create', 'update'),
     }),
   },
 
   taxonomyDelete: {
     params: Joi.object({
-      table: Joi.string()
-        .valid('component_types', 'resource_types', 'organs', 'materials', 'fabrication_methods', 'model_types', 'licenses')
-        .required(),
+      table: taxonomyTable,
       identifier: Joi.string().trim().max(80).required(),
     }),
+    query: Joi.object({ componentType: Joi.string().trim().max(64).allow('') }),
   },
 
   setting: {

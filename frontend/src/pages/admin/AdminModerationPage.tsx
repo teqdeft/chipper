@@ -1,10 +1,15 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AdminActionBar, AdminActionButton, AdminStatCard, AdminToolbar } from '@/components/admin';
+import {
+  AdminActionBar,
+  AdminActionButton,
+  AdminFilterSelect,
+  AdminStatCard,
+  AdminToolbar,
+} from '@/components/admin';
 import { PageHeader } from '@/components/ui/app/PageHeader';
 import { EmptyState } from '@/components/ui/app/EmptyState';
 import { StatusBadge } from '@/components/ui/app/StatusBadge';
-import { TextSelect } from '@/components/ui/app/FormField';
 import { ErrorState, LoadingState } from '@/components/ui/app/LoadingState';
 import { Pagination } from '@/components/ui/app/Pagination';
 import { Reveal, RevealGroup, RevealItem } from '@/components/ui/Reveal';
@@ -121,13 +126,14 @@ export default function AdminModerationPage() {
       ) : null}
 
       <AdminToolbar>
-        <TextSelect
-          className="w-44"
+        <AdminFilterSelect
+          className="w-36"
           value={statusFilter}
           onChange={(e) => {
             setPage(1);
             setStatusFilter(e.target.value);
           }}
+          aria-label="Filter reports"
         >
           <option value="">All reports</option>
           {(['open', 'reviewing', 'resolved', 'dismissed'] as const).map((status) => (
@@ -135,7 +141,7 @@ export default function AdminModerationPage() {
               {status}
             </option>
           ))}
-        </TextSelect>
+        </AdminFilterSelect>
       </AdminToolbar>
 
       {isLoading ? (

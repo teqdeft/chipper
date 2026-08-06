@@ -4,7 +4,7 @@
 const { db } = require('../../database/connection');
 const ApiError = require('../../utils/ApiError');
 const { getPagination, buildPaginationMeta } = require('../../utils/pagination');
-const { slugify } = require('../../utils/helpers');
+const { slugify, parseJson } = require('../../utils/helpers');
 const {
   DESIGN_STATUS, USER_STATUS, ROLES, ENTITY_TYPE, NOTIFICATION_TYPE,
 } = require('../../config/constants');
@@ -18,6 +18,120 @@ const moderationService = require('../moderation/moderation.service');
 const mailService = require('../../services/mail.service');
 const auditService = require('../../services/audit.service');
 const taxonomyService = require('../taxonomy/taxonomy.service');
+const { TAXONOMY_TABLES } = require('./taxonomy.tables');
+
+/** Looks up a taxonomy descriptor, rejecting anything not on the allowlist. */
+function taxonomySpec(table) {
+  if (!Object.prototype.hasOwnProperty.call(TAXONOMY_TABLES, table)) {
+    throw ApiError.badRequest('Unknown taxonomy');
+  }
+  return TAXONOMY_TABLES[table];
+}
+
+/**
+ * Applies the parent filter for the component-type-dependent lists.
+ * `undefined` means "no filter"; `null` means "the global rows" — which is a
+ * NULL comparison, not an equality one.
+ */
+function withScope(query, table, spec, scopeId) {
+  if (!spec.scope || scopeId === undefined) return query;
+  const column = `${table}.${spec.scope}`;
+  return scopeId === null ? query.whereNull(column) : query.where(column, scopeId);
+}
+
+/** Resolves a component-type slug (or id) to the parent id an upsert writes. */
+async function resolveScope(spec, value) {
+  if (!spec.scope) return undefined;
+  const id = await taxonomyService.resolveId('component_types', value);
+  if (spec.scopeRequired && !id) throw ApiError.badRequest('A component type is required for this list');
+  if (value && !id) throw ApiError.badRequest(`Unknown component type "${value}"`);
+  return id;
+}
+
+/**
+ * Base read query for a taxonomy — carries the parent join and the tag usage
+ * counters, so a row serialises the same way whether it came from the list or
+ * from an upsert read-back.
+ */
+function taxonomyQuery(table, spec) {
+  const q = db(table).select(`${table}.*`);
+
+  if (spec.scope) {
+    q.leftJoin('component_types', `${table}.component_type_id`, 'component_types.id').select(
+      'component_types.slug as component_type_slug',
+    );
+  }
+
+  if (table === 'tags') {
+    q.select(
+      db.raw(
+        '(select count(*) from design_tags where design_tags.tag_id = tags.id)' +
+          ' + (select count(*) from forum_topic_tags where forum_topic_tags.tag_id = tags.id) as in_use',
+      ),
+    );
+  }
+
+  return q;
+}
+
+/** Identifier for a new or edited row — explicit if given, else from the name. */
+function taxonomyIdentifier(spec, payload) {
+  const explicit =
+    spec.key === 'code' ? payload.code : spec.key === 'field_key' ? payload.fieldKey : payload.slug;
+  if (explicit) {
+    const trimmed = String(explicit).trim();
+    if (spec.key === 'code') return trimmed;
+    return spec.key === 'field_key' ? slugify(trimmed).replace(/-/g, '_') : slugify(trimmed);
+  }
+
+  const fromName = slugify(payload.name || '');
+  if (spec.key === 'code') return fromName.toUpperCase();
+  return spec.key === 'field_key' ? fromName.replace(/-/g, '_') : fromName;
+}
+
+/** How many designs and topics still point at a tag. */
+async function tagUsage(tagId) {
+  const [[designs], [topics]] = await Promise.all([
+    db('design_tags').where({ tag_id: tagId }).count({ total: 'tag_id' }),
+    db('forum_topic_tags').where({ tag_id: tagId }).count({ total: 'tag_id' }),
+  ]);
+  return Number(designs.total) + Number(topics.total);
+}
+
+/** One admin-facing shape for every table, whatever its columns are called. */
+function serializeTaxonomyRow(table, spec, row) {
+  const base = {
+    id: row.id,
+    identifier: row[spec.key],
+    name: row[spec.nameCol],
+    note: spec.noteCol ? row[spec.noteCol] ?? null : null,
+    sortOrder: row.sort_order ?? null,
+    active: spec.remove === 'delete' ? true : Boolean(row.is_active),
+  };
+
+  switch (table) {
+    case 'licenses':
+      return { ...base, family: row.family ?? null, url: row.url ?? null };
+    case 'tags':
+      return { ...base, usageCount: Number(row.usage_count ?? 0), inUse: Number(row.in_use ?? 0) };
+    case 'working_principles':
+      return { ...base, componentType: row.component_type_slug ?? null };
+    case 'component_type_fields':
+      return {
+        ...base,
+        componentType: row.component_type_slug ?? null,
+        dataType: row.data_type,
+        unit: row.unit ?? null,
+        options: parseJson(row.options, null),
+        min: row.min_value === null || row.min_value === undefined ? null : Number(row.min_value),
+        max: row.max_value === null || row.max_value === undefined ? null : Number(row.max_value),
+        required: Boolean(row.is_required),
+        filterable: Boolean(row.is_filterable),
+      };
+    default:
+      return base;
+  }
+}
 
 const adminService = {
   /** SCR-032 — dashboard stats + shortcuts. */
@@ -491,49 +605,152 @@ const adminService = {
   },
 
   // ── Taxonomy management (CHIP-008..015) ──────────────────────────────────
-  /** Lets an admin extend the controlled vocabularies without a deployment. */
+  /**
+   * Admin view of one vocabulary. Unlike the public endpoint this can include
+   * deactivated rows — an admin needs to see what was retired in order to bring
+   * it back.
+   */
+  async listTaxonomyItems(table, query = {}) {
+    const spec = taxonomySpec(table);
+    const q = taxonomyQuery(table, spec);
+
+    if (spec.scope && query.componentType) {
+      const scopeId = await resolveScope(spec, query.componentType);
+      // A working principle with no component type applies to every one of them,
+      // so it stays visible while filtering. Field definitions are always owned.
+      q.where((b) => {
+        b.where(`${table}.${spec.scope}`, scopeId);
+        if (!spec.scopeRequired) b.orWhereNull(`${table}.${spec.scope}`);
+      });
+    }
+
+    if (spec.remove === 'flag' && !query.includeInactive) q.where(`${table}.is_active`, true);
+
+    if (query.search) {
+      const like = `%${String(query.search).trim()}%`;
+      q.where((b) => b.where(`${table}.${spec.nameCol}`, 'like', like).orWhere(`${table}.${spec.key}`, 'like', like));
+    }
+
+    if (spec.columns.includes('sort_order')) q.orderBy(`${table}.sort_order`);
+    if (table === 'tags') q.orderBy('tags.usage_count', 'desc');
+    q.orderBy(`${table}.${spec.nameCol}`);
+
+    const limit = Math.min(Number(query.limit) || 250, 500);
+    const rows = await q.limit(limit);
+    return rows.map((row) => serializeTaxonomyRow(table, spec, row));
+  },
+
+  /**
+   * Lets an admin extend or correct the controlled vocabularies without a
+   * deployment.
+   *
+   * The payload is filtered against the columns the target table actually has —
+   * without that, a caller sending a wrong-but-plausible key gets an "Unknown
+   * column" 500 instead of a save. `expect` turns the upsert into a checked
+   * create or update so the add form cannot silently overwrite a row that is
+   * already there.
+   */
   async upsertTaxonomyItem(table, payload) {
-    const allowed = [
-      'component_types', 'resource_types', 'organs', 'materials',
-      'fabrication_methods', 'model_types', 'licenses',
-    ];
-    if (!allowed.includes(table)) throw ApiError.badRequest('Unknown taxonomy');
+    const spec = taxonomySpec(table);
+    const scopeId = await resolveScope(spec, payload.componentType);
 
-    const key = table === 'licenses' ? 'code' : 'slug';
-    const identifier = table === 'licenses' ? payload.code : payload.slug || slugify(payload.name);
+    const identifier = taxonomyIdentifier(spec, payload);
+    if (!identifier) throw ApiError.badRequest('Could not derive an identifier from the name');
 
-    const existing = await db(table).where({ [key]: identifier }).first();
-    const row = {
-      [key]: identifier,
-      name: payload.name,
-      ...(table === 'licenses'
-        ? {
-            family: payload.family,
-            url: payload.url,
-            summary: payload.summary,
-            requires_attribution: payload.requiresAttribution,
-            allows_commercial: payload.allowsCommercial,
-            share_alike: payload.shareAlike,
-          }
-        : { note: payload.note, description: payload.description }),
+    const existing = await withScope(db(table).where({ [spec.key]: identifier }), table, spec, scopeId).first();
+    if (payload.expect === 'create' && existing) {
+      throw ApiError.conflict(`"${identifier}" already exists in this list — edit it instead`, {
+        code: 'TAXONOMY_EXISTS',
+        details: { identifier },
+      });
+    }
+    if (payload.expect === 'update' && !existing) throw ApiError.notFound('Item not found');
+
+    const note = payload.note !== undefined ? payload.note
+      : payload.description !== undefined ? payload.description
+        : payload.summary;
+
+    const candidate = {
+      [spec.key]: identifier,
+      [spec.nameCol]: payload.name,
+      ...(spec.noteCol ? { [spec.noteCol]: note } : {}),
+      ...(spec.scope ? { [spec.scope]: scopeId } : {}),
+      icon: payload.icon,
+      family: payload.family,
+      url: payload.url,
+      requires_attribution: payload.requiresAttribution,
+      allows_commercial: payload.allowsCommercial,
+      share_alike: payload.shareAlike,
+      data_type: payload.dataType,
+      unit: payload.unit,
+      options: payload.options === undefined || payload.options === null
+        ? payload.options
+        : JSON.stringify(payload.options),
+      min_value: payload.min,
+      max_value: payload.max,
+      is_required: payload.required,
+      is_filterable: payload.filterable,
       sort_order: payload.sortOrder,
       is_active: payload.active,
     };
-    const clean = Object.fromEntries(Object.entries(row).filter(([, v]) => v !== undefined));
+    const clean = Object.fromEntries(
+      Object.entries(candidate).filter(([column, v]) => v !== undefined && spec.columns.includes(column)),
+    );
 
     if (existing) await db(table).where({ id: existing.id }).update(clean);
     else await db(table).insert(clean);
 
     taxonomyService.bustCache();
-    return db(table).where({ [key]: identifier }).first();
+    const saved = await withScope(
+      taxonomyQuery(table, spec).where(`${table}.${spec.key}`, identifier),
+      table,
+      spec,
+      scopeId,
+    ).first();
+    return serializeTaxonomyRow(table, spec, saved);
   },
 
-  async deactivateTaxonomyItem(table, identifier) {
-    const key = table === 'licenses' ? 'code' : 'slug';
-    const updated = await db(table).where({ [key]: identifier }).update({ is_active: false });
-    if (!updated) throw ApiError.notFound('Item not found');
+  /**
+   * Retires an item. Everything but tags is soft-deactivated so existing designs
+   * keep resolving it; tags have no such flag, so they are deleted — and only
+   * once nothing points at them.
+   */
+  async removeTaxonomyItem(table, identifier, query = {}) {
+    const spec = taxonomySpec(table);
+    const scopeId = await resolveScope(spec, query.componentType);
+    const row = await withScope(db(table).where({ [spec.key]: identifier }), table, spec, scopeId).first();
+    if (!row) throw ApiError.notFound('Item not found');
+
+    if (spec.remove === 'delete') {
+      const uses = await tagUsage(row.id);
+      if (uses > 0) {
+        throw ApiError.conflict('Remove this tag from its designs and topics before deleting it', {
+          code: 'TAG_IN_USE',
+          details: { uses },
+        });
+      }
+      await db(table).where({ id: row.id }).del();
+      taxonomyService.bustCache();
+      return { deleted: true };
+    }
+
+    await db(table).where({ id: row.id }).update({ is_active: false });
     taxonomyService.bustCache();
     return { deactivated: true };
+  },
+
+  /** Brings a deactivated item back into the wizard and the browse filters. */
+  async restoreTaxonomyItem(table, identifier, query = {}) {
+    const spec = taxonomySpec(table);
+    if (spec.remove === 'delete') throw ApiError.badRequest('This list has no inactive items');
+
+    const scopeId = await resolveScope(spec, query.componentType);
+    const row = await withScope(db(table).where({ [spec.key]: identifier }), table, spec, scopeId).first();
+    if (!row) throw ApiError.notFound('Item not found');
+
+    await db(table).where({ id: row.id }).update({ is_active: true });
+    taxonomyService.bustCache();
+    return { restored: true };
   },
 
   /** Audit trail reader (CHIP-038). */

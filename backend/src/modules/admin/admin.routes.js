@@ -135,11 +135,23 @@ router.delete(
 );
 
 // ── Taxonomies, settings, audit ───────────────────────────────────────────
+router.get(
+  '/taxonomies/:table',
+  can(PERMISSIONS.TAXONOMY_MANAGE),
+  validate(validator.taxonomyList),
+  controller.listTaxonomy,
+);
 router.put(
   '/taxonomies/:table',
   can(PERMISSIONS.TAXONOMY_MANAGE),
   validate(validator.taxonomyUpsert),
   controller.upsertTaxonomy,
+);
+router.post(
+  '/taxonomies/:table/:identifier/restore',
+  can(PERMISSIONS.TAXONOMY_MANAGE),
+  validate(validator.taxonomyDelete),
+  controller.restoreTaxonomy,
 );
 router.delete(
   '/taxonomies/:table/:identifier',

@@ -176,6 +176,13 @@ module.exports = {
   ),
 
   // ── Taxonomies & settings ────────────────────────────────────────────────
+  listTaxonomy: asyncHandler(async (req, res) =>
+    ApiResponse.success(res, {
+      data: await adminService.listTaxonomyItems(req.params.table, req.query),
+      message: 'Taxonomy items',
+    }),
+  ),
+
   upsertTaxonomy: asyncHandler(async (req, res) =>
     ApiResponse.success(res, {
       data: { item: await adminService.upsertTaxonomyItem(req.params.table, req.body) },
@@ -183,10 +190,18 @@ module.exports = {
     }),
   ),
 
-  deleteTaxonomy: asyncHandler(async (req, res) =>
+  deleteTaxonomy: asyncHandler(async (req, res) => {
+    const result = await adminService.removeTaxonomyItem(req.params.table, req.params.identifier, req.query);
+    return ApiResponse.success(res, {
+      data: result,
+      message: result.deleted ? 'Taxonomy item deleted' : 'Taxonomy item deactivated',
+    });
+  }),
+
+  restoreTaxonomy: asyncHandler(async (req, res) =>
     ApiResponse.success(res, {
-      data: await adminService.deactivateTaxonomyItem(req.params.table, req.params.identifier),
-      message: 'Taxonomy item deactivated',
+      data: await adminService.restoreTaxonomyItem(req.params.table, req.params.identifier, req.query),
+      message: 'Taxonomy item restored',
     }),
   ),
 

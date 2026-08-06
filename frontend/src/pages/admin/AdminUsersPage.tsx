@@ -1,9 +1,16 @@
 import { useState } from 'react';
-import { AdminActionBar, AdminActionButton, AdminToolbar } from '@/components/admin';
+import {
+  AdminActionBar,
+  AdminActionButton,
+  AdminFilterSelect,
+  AdminSearchField,
+  AdminToolbar,
+  AdminToolbarButton,
+} from '@/components/admin';
 import { PageHeader } from '@/components/ui/app/PageHeader';
 import { DataTable } from '@/components/ui/app/DataTable';
 import { StatusBadge } from '@/components/ui/app/StatusBadge';
-import { TextInput, TextSelect } from '@/components/ui/app/FormField';
+import { TextSelect } from '@/components/ui/app/FormField';
 import { ErrorState, LoadingState } from '@/components/ui/app/LoadingState';
 import { Pagination } from '@/components/ui/app/Pagination';
 import { useApiResource } from '@/hooks/useApiResource';
@@ -123,20 +130,19 @@ export default function AdminUsersPage() {
           setSubmittedSearch(search);
         }}
       >
-        <div className="min-w-[220px] flex-1">
-          <TextInput
-            placeholder="Search name, handle, email or affiliation…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-        <TextSelect
-          className="w-40"
+        <AdminSearchField
+          placeholder="Search name, handle, email…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          aria-label="Search users"
+        />
+        <AdminFilterSelect
           value={roleFilter}
           onChange={(e) => {
             setPage(1);
             setRoleFilter(e.target.value);
           }}
+          aria-label="Filter by role"
         >
           <option value="">All roles</option>
           {ASSIGNABLE_ROLES.map((role) => (
@@ -144,14 +150,14 @@ export default function AdminUsersPage() {
               {role}
             </option>
           ))}
-        </TextSelect>
-        <TextSelect
-          className="w-40"
+        </AdminFilterSelect>
+        <AdminFilterSelect
           value={statusFilter}
           onChange={(e) => {
             setPage(1);
             setStatusFilter(e.target.value);
           }}
+          aria-label="Filter by status"
         >
           <option value="">All statuses</option>
           {(['active', 'pending', 'suspended', 'banned'] as const).map((status) => (
@@ -159,10 +165,8 @@ export default function AdminUsersPage() {
               {status}
             </option>
           ))}
-        </TextSelect>
-        <button type="submit" className="btn-ghost text-sm">
-          Search
-        </button>
+        </AdminFilterSelect>
+        <AdminToolbarButton>Search</AdminToolbarButton>
       </AdminToolbar>
 
       {isLoading ? (

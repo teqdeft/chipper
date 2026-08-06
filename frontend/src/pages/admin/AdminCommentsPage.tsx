@@ -1,10 +1,16 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AdminActionBar, AdminActionButton, AdminToolbar } from '@/components/admin';
+import {
+  AdminActionBar,
+  AdminActionButton,
+  AdminFilterSelect,
+  AdminSearchField,
+  AdminToolbar,
+  AdminToolbarButton,
+} from '@/components/admin';
 import { PageHeader } from '@/components/ui/app/PageHeader';
 import { EmptyState } from '@/components/ui/app/EmptyState';
 import { StatusBadge } from '@/components/ui/app/StatusBadge';
-import { TextInput, TextSelect } from '@/components/ui/app/FormField';
 import { ErrorState, LoadingState } from '@/components/ui/app/LoadingState';
 import { Pagination } from '@/components/ui/app/Pagination';
 import { Reveal, RevealGroup, RevealItem } from '@/components/ui/Reveal';
@@ -80,20 +86,19 @@ export default function AdminCommentsPage() {
           setSubmittedSearch(search);
         }}
       >
-        <div className="min-w-[220px] flex-1">
-          <TextInput
-            placeholder="Search comment text…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-        <TextSelect
-          className="w-40"
+        <AdminSearchField
+          placeholder="Search comment text…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          aria-label="Search comments"
+        />
+        <AdminFilterSelect
           value={statusFilter}
           onChange={(e) => {
             setPage(1);
             setStatusFilter(e.target.value);
           }}
+          aria-label="Filter by status"
         >
           <option value="">All statuses</option>
           {(['visible', 'hidden', 'removed'] as const).map((status) => (
@@ -101,10 +106,8 @@ export default function AdminCommentsPage() {
               {status}
             </option>
           ))}
-        </TextSelect>
-        <button type="submit" className="btn-ghost text-sm">
-          Search
-        </button>
+        </AdminFilterSelect>
+        <AdminToolbarButton>Search</AdminToolbarButton>
       </AdminToolbar>
 
       {isLoading ? (

@@ -258,7 +258,13 @@ export const adminApi = {
 
   updateCategory: (
     slug: string,
-    payload: { name?: string; description?: string; locked?: boolean; active?: boolean; sortOrder?: number },
+    payload: {
+      name?: string;
+      description?: string | null;
+      locked?: boolean;
+      active?: boolean;
+      sortOrder?: number;
+    },
   ) => api.patch<{ category: AdminCategory }>(`/admin/forum/categories/${slug}`, payload).then((r) => r.data.category),
 
   deleteCategory: (slug: string) =>
@@ -268,18 +274,69 @@ export const adminApi = {
   topics: (filters: { page?: number; limit?: number; search?: string } = {}) =>
     paged<AdminTopic>(`/forum/topics${toQuery({ sort: 'newest', ...filters })}`),
 
-  /** Pin, lock or move a topic (moderator+, /forum/topics/:id/moderate). */
-  moderateTopic: (identifier: string, payload: { pinned?: boolean; status?: 'open' | 'solved' | 'locked' }) =>
-    api.patch<{ topic: AdminTopic }>(`/forum/topics/${identifier}/moderate`, payload).then((r) => r.data.topic),
+  /** Full thread (topic + posts) for admin post moderation. */
+  getTopic: (identifier: string, params: { page?: number; limit?: number } = {}) =>
+    api
+      .get<AdminTopicDetail>(`/forum/topics/${encodeURIComponent(identifier)}${toQuery(params)}`)
+      .then((r) => r.data),
+
+  /** Edit title / type (author or moderator+). */
+  updateTopic: (
+    identifier: string,
+    payload: { title?: string; type?: AdminTopic['type']; tags?: string[] },
+  ) =>
+    api
+      .patch<{ topic: AdminTopic }>(`/forum/topics/${encodeURIComponent(identifier)}`, payload)
+      .then((r) => r.data.topic),
+
+  /** Soft-delete a topic (author or moderator+). */
+  deleteTopic: (identifier: string) =>
+    api
+      .delete<{ deleted: boolean }>(`/forum/topics/${encodeURIComponent(identifier)}`)
+      .then((r) => r.data),
+
+  /** Pin, lock, move or change status (moderator+, /forum/topics/:id/moderate). */
+  moderateTopic: (
+    identifier: string,
+    payload: {
+      pinned?: boolean;
+      status?: 'open' | 'solved' | 'locked';
+      category?: string;
+      note?: string;
+    },
+  ) =>
+    api
+      .patch<{ topic: AdminTopic }>(`/forum/topics/${encodeURIComponent(identifier)}/moderate`, payload)
+      .then((r) => r.data.topic),
+
+  updatePost: (postId: number, body: string) =>
+    api.patch<{ post: AdminForumPost }>(`/forum/posts/${postId}`, { body }).then((r) => r.data.post),
+
+  deletePost: (postId: number) =>
+    api.delete<{ deleted: boolean }>(`/forum/posts/${postId}`).then((r) => r.data),
 
   // ── Taxonomies ───────────────────────────────────────────────────────────
-  upsertTaxonomy: (table: TaxonomyTable, payload: TaxonomyPayload) =>
-    api.put<{ item: unknown }>(`/admin/taxonomies/${table}`, payload).then((r) => r.data),
-
-  deleteTaxonomy: (table: TaxonomyTable, identifier: string) =>
+  /** Admin view — unlike the public list this can include retired items. */
+  taxonomyItems: (table: TaxonomyTable, params: TaxonomyListParams = {}) =>
     api
-      .delete<{ deactivated: boolean }>(
-        `/admin/taxonomies/${table}/${encodeURIComponent(identifier)}`,
+      .get<AdminTaxonomyItem[]>(`/admin/taxonomies/${table}${toQuery(params)}`)
+      .then((r) => r.data ?? []),
+
+  upsertTaxonomy: (table: TaxonomyTable, payload: TaxonomyPayload) =>
+    api.put<{ item: AdminTaxonomyItem }>(`/admin/taxonomies/${table}`, payload).then((r) => r.data),
+
+  deleteTaxonomy: (table: TaxonomyTable, identifier: string, params: TaxonomyScopeParams = {}) =>
+    api
+      .delete<{ deactivated?: boolean; deleted?: boolean }>(
+        `/admin/taxonomies/${table}/${encodeURIComponent(identifier)}${toQuery(params)}`,
+      )
+      .then((r) => r.data),
+
+  restoreTaxonomy: (table: TaxonomyTable, identifier: string, params: TaxonomyScopeParams = {}) =>
+    api
+      .post<{ restored: boolean }>(
+        `/admin/taxonomies/${table}/${encodeURIComponent(identifier)}/restore${toQuery(params)}`,
+        {},
       )
       .then((r) => r.data),
 
@@ -293,6 +350,7 @@ export type AdminTopic = {
   numericId: number;
   slug: string;
   title: string;
+  type: 'question' | 'discussion' | 'announcement';
   status: 'open' | 'solved' | 'locked';
   pinned: boolean;
   views: number;
@@ -300,6 +358,24 @@ export type AdminTopic = {
   category: { slug: string; name: string };
   author: { name: string; handle: string };
   createdAt: string;
+};
+
+export type AdminForumPost = {
+  id: number;
+  body: string;
+  status: string;
+  isFirstPost: boolean;
+  isAccepted: boolean;
+  votes: number;
+  author: { name: string; handle: string };
+  editedAt: string | null;
+  createdAt: string;
+};
+
+export type AdminTopicDetail = {
+  topic: AdminTopic;
+  posts: AdminForumPost[];
+  pagination: ApiPagination;
 };
 
 export type AdminUserDetail = AdminUser & {
@@ -319,12 +395,67 @@ export type TaxonomyTable =
   | 'materials'
   | 'fabrication_methods'
   | 'model_types'
-  | 'licenses';
+  | 'licenses'
+  | 'working_principles'
+  | 'component_type_fields'
+  | 'tags';
+
+export type FieldDataType =
+  | 'string'
+  | 'text'
+  | 'number'
+  | 'range'
+  | 'boolean'
+  | 'select'
+  | 'multiselect'
+  | 'reference';
+
+/** Allowed values of a select field — either inline, or borrowed from another list. */
+export type FieldOptions = { source?: string; values?: string[] };
+
+/**
+ * One row of any taxonomy, normalised by the API — `identifier` is whatever that
+ * table keys on (slug, licence code, field key) and `note` is its free-text
+ * column, whichever it happens to be called.
+ */
+export type AdminTaxonomyItem = {
+  id: number;
+  identifier: string;
+  name: string;
+  note: string | null;
+  sortOrder: number | null;
+  active: boolean;
+  /** Licenses. */
+  family?: string | null;
+  url?: string | null;
+  /** Tags — `inUse` counts designs and topics still pointing at it. */
+  usageCount?: number;
+  inUse?: number;
+  /** Working principles and field definitions; null means "every component type". */
+  componentType?: string | null;
+  /** Field definitions. */
+  dataType?: FieldDataType;
+  unit?: string | null;
+  options?: FieldOptions | null;
+  min?: number | null;
+  max?: number | null;
+  required?: boolean;
+  filterable?: boolean;
+};
+
+export type TaxonomyScopeParams = { componentType?: string };
+
+export type TaxonomyListParams = TaxonomyScopeParams & {
+  includeInactive?: boolean;
+  search?: string;
+  limit?: number;
+};
 
 export type TaxonomyPayload = {
   name: string;
   slug?: string;
   code?: string;
+  fieldKey?: string;
   note?: string | null;
   description?: string | null;
   family?: string | null;
@@ -333,8 +464,18 @@ export type TaxonomyPayload = {
   requiresAttribution?: boolean;
   allowsCommercial?: boolean;
   shareAlike?: boolean;
+  componentType?: string | null;
+  dataType?: FieldDataType;
+  unit?: string | null;
+  options?: FieldOptions | null;
+  min?: number | null;
+  max?: number | null;
+  required?: boolean;
+  filterable?: boolean;
   sortOrder?: number;
   active?: boolean;
+  /** Makes the upsert a checked create or update instead of a silent overwrite. */
+  expect?: 'create' | 'update';
 };
 
 export type AdminAuditLog = {
