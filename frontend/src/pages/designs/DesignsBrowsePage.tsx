@@ -131,6 +131,7 @@ function ChipPreview({ design }: { design: BrowseItem }) {
         src={design.coverImageUrl}
         alt=""
         loading="lazy"
+        decoding="async"
         className="h-full w-full object-cover transition-transform duration-500 ease-premium group-hover:scale-[1.04]"
       />
     );
@@ -192,14 +193,14 @@ function SpecLine({ design }: { design: BrowseItem }) {
 }
 
 const cardVariants = {
-  hidden: { opacity: 0, y: 24, scale: 0.98 },
+  hidden: { opacity: 0, y: 28, scale: 0.985 },
   show: (i: number) => ({
     opacity: 1,
     y: 0,
     scale: 1,
-    transition: { duration: 0.55, delay: Math.min(i, 8) * 0.05, ease: premiumEase },
+    transition: { duration: 0.8, delay: 0.08 + Math.min(i, 8) * 0.09, ease: premiumEase },
   }),
-  exit: { opacity: 0, y: 10, scale: 0.98, transition: { duration: 0.2, ease: premiumEase } },
+  exit: { opacity: 0, y: 10, scale: 0.98, transition: { duration: 0.25, ease: premiumEase } },
 };
 
 export default function DesignsBrowsePage() {
@@ -297,7 +298,7 @@ export default function DesignsBrowsePage() {
   const canUpload = isAuthenticated && hasPermission('design.create');
 
   const filterRail = (
-    <aside className="rounded-card border border-line bg-surface/90 p-5 shadow-soft backdrop-blur-sm lg:sticky lg:top-28">
+    <aside className="rounded-card border border-line bg-surface p-5 shadow-soft lg:sticky lg:top-28">
       <div className="mb-6 flex items-center justify-between gap-2">
         <h2 className="eyebrow text-muted">Filters</h2>
         {activeFilterCount > 0 ? (
@@ -475,19 +476,17 @@ export default function DesignsBrowsePage() {
             </EmptyState>
           ) : (
             <>
-              <motion.div
-                layout
+              <div
                 className={cn(
                   'grid auto-rows-fr gap-4 sm:grid-cols-2 xl:grid-cols-3',
                   // Keeps the grid readable while the next page loads.
                   designs.isLoading && 'opacity-60 transition-opacity',
                 )}
               >
-                <AnimatePresence mode="popLayout">
+                <AnimatePresence>
                   {items.map((design, i) => (
                     <motion.div
                       key={design.id}
-                      layout
                       custom={i}
                       variants={reduced ? undefined : cardVariants}
                       initial={reduced ? false : 'hidden'}
@@ -507,11 +506,11 @@ export default function DesignsBrowsePage() {
                           className="relative h-[120px] shrink-0 overflow-hidden border-b border-line sm:h-[132px]"
                         >
                           <ChipPreview design={design} />
-                          <span className="absolute right-2.5 top-2.5 rounded-pill bg-canvas/85 px-2 py-0.5 text-[0.62rem] font-bold uppercase tracking-wider text-muted backdrop-blur-sm">
+                          <span className="absolute right-2.5 top-2.5 rounded-pill bg-canvas/90 px-2 py-0.5 text-[0.62rem] font-bold uppercase tracking-wider text-muted">
                             {design.resourceType?.name ?? 'Design'}
                           </span>
                           {design.isMock ? (
-                            <span className="absolute left-2.5 top-2.5 rounded-pill bg-periwinkle-tint/90 px-2 py-0.5 text-[0.62rem] font-bold uppercase tracking-wider text-deep-periwinkle backdrop-blur-sm">
+                            <span className="absolute left-2.5 top-2.5 rounded-pill bg-periwinkle-tint px-2 py-0.5 text-[0.62rem] font-bold uppercase tracking-wider text-deep-periwinkle">
                               Demo
                             </span>
                           ) : null}
@@ -609,7 +608,7 @@ export default function DesignsBrowsePage() {
                     </motion.div>
                   ))}
                 </AnimatePresence>
-              </motion.div>
+              </div>
 
               <Pagination pagination={pagination} onPage={setPage} />
             </>

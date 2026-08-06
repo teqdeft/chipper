@@ -86,21 +86,35 @@ async function resolveTaxonomyIds(payload) {
   return { componentTypeId, resourceTypeId, licenseId, materialId, fabricationId, organIds };
 }
 
-/** Maps an API payload onto design_versions columns. */
+/**
+ * Maps an API payload onto design_versions columns.
+ *
+ * Every plain field here is left `undefined` when the payload does not carry it,
+ * so `pick` drops it and an update only touches what was sent. The taxonomy FKs
+ * need the same treatment spelled out: `resolveTaxonomyIds` maps an absent field
+ * to null, and null survives `pick`, so writing them unconditionally would blank
+ * out every taxonomy link a PATCH did not happen to mention — leaving a design
+ * that reads fine but can no longer pass the publish gate.
+ *
+ * None of these fields accept null or '' from the validator, so "sent" is exactly
+ * "not undefined"; there is no way to clear one on purpose that this would break.
+ */
 function buildVersionColumns(payload, ids, typeSpecific) {
   const operating = payload.operatingParameters || {};
+  const whenSent = (key, id) => (payload[key] !== undefined ? id : undefined);
+
   return {
     title: payload.title,
     summary: payload.summary,
     description: payload.description,
-    component_type_id: ids.componentTypeId,
-    resource_type_id: ids.resourceTypeId,
-    license_id: ids.licenseId,
+    component_type_id: whenSent('componentType', ids.componentTypeId),
+    resource_type_id: whenSent('resourceType', ids.resourceTypeId),
+    license_id: whenSent('license', ids.licenseId),
     custom_license_text: payload.customLicenseText,
     how_to_cite: payload.howToCite,
     credits_note: payload.creditsNote,
-    tested_material_id: ids.materialId,
-    tested_fabrication_method_id: ids.fabricationId,
+    tested_material_id: whenSent('testedMaterial', ids.materialId),
+    tested_fabrication_method_id: whenSent('testedFabricationMethod', ids.fabricationId),
     clip_string: payload.clipString,
     max_height_mm: payload.maxHeightMm,
     clamping_zone_height_mm: payload.clampingZoneHeightMm,

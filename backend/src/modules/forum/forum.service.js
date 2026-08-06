@@ -454,6 +454,15 @@ const forumService = {
     const alreadyAccepted = Number(topic.accepted_post_id) === Number(postId);
 
     await db.transaction(async (trx) => {
+      // Acceptance carries +15, so it has to be handed back whenever it moves or
+      // is cleared — otherwise toggling accept off and on farms 15 a time, and
+      // moving it to another answer leaves the old author holding it as well.
+      // Read the row directly instead of findPost: a soft-deleted answer still
+      // awarded its author, and that award should come back too.
+      const previous = topic.accepted_post_id
+        ? await trx('forum_posts').where({ id: topic.accepted_post_id }).first('user_id')
+        : null;
+
       await trx('forum_posts').where({ topic_id: topic.id }).update({ is_accepted: false });
       if (!alreadyAccepted) await trx('forum_posts').where({ id: postId }).update({ is_accepted: true });
 
@@ -466,6 +475,7 @@ const forumService = {
         trx,
       );
 
+      if (previous) await trx('users').where({ id: previous.user_id }).decrement('reputation', 15);
       if (!alreadyAccepted) await trx('users').where({ id: post.user_id }).increment('reputation', 15);
     });
 
