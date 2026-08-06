@@ -20,7 +20,7 @@ const sections = [
   },
   {
     title: 'Contact',
-    body: 'Questions about this policy can be sent to privacy@chipper.org. This is placeholder legal prose — a final version will be reviewed by counsel before launch.',
+    body: 'Questions about this policy can be sent to privacy@chipper.org.',
   },
 ] as const;
 
