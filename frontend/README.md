@@ -4,7 +4,7 @@ A premium, production-ready marketing site for **Chipper**, an open community
 platform for microphysiological systems (organ-on-a-chip designs). Built to the
 **Chipper Design System v6** — warm canvas, coral lead, periwinkle counter-anchor,
 aubergine ink, Bricolage Grotesque + Inter.
-
+.
 ## Stack
 
 - **Vite 6** + **React 18** + **TypeScript**

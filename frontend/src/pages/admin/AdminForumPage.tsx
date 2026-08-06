@@ -10,6 +10,8 @@ import { Pagination } from '@/components/ui/app/Pagination';
 import { useApiResource } from '@/hooks/useApiResource';
 import { useToast } from '@/app/providers/ToastProvider';
 import { adminApi } from '@/lib/api/admin';
+import { describeError } from '@/lib/api/errors';
+import type { DescribedError } from '@/lib/api/errors';
 import type { AdminCategory, AdminForumPost, AdminTopic, AdminTopicDetail } from '@/lib/api/admin';
 
 const topicStatusTone: Record<AdminTopic['status'], 'green' | 'yellow' | 'ink'> = {
@@ -47,7 +49,7 @@ export default function AdminForumPage() {
   const [threadSlug, setThreadSlug] = useState<string | null>(null);
   const [thread, setThread] = useState<AdminTopicDetail | null>(null);
   const [threadLoading, setThreadLoading] = useState(false);
-  const [threadError, setThreadError] = useState<unknown>(null);
+  const [threadError, setThreadError] = useState<DescribedError | null>(null);
   const [editingPost, setEditingPost] = useState<{ id: number; body: string } | null>(null);
 
   const categories = useApiResource(() => adminApi.categories(), []);
@@ -223,7 +225,9 @@ export default function AdminForumPage() {
       const detail = await adminApi.getTopic(slug, { limit: 50 });
       setThread(detail);
     } catch (err) {
-      setThreadError(err);
+      // ErrorState renders a described failure, not a raw throw — same shape
+      // useApiResource hands its consumers.
+      setThreadError(describeError(err));
       setThread(null);
     } finally {
       setThreadLoading(false);
