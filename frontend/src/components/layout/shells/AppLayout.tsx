@@ -3,6 +3,7 @@ import { useMatch } from 'react-router-dom';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import { AnimatedOutlet } from '@/components/ui/Reveal';
+import { ZOOM_EPSILON } from '@/hooks/useVisualViewport';
 import { cn } from '@/lib/utils';
 
 /**
@@ -25,7 +26,12 @@ export default function AppLayout() {
     root.classList.add('chat-thread-active');
 
     const syncVvh = () => {
-      const height = window.visualViewport?.height ?? window.innerHeight;
+      const vv = window.visualViewport;
+      // While the page is zoomed, vv.height is the zoomed height (layout height
+      // divided by scale). Writing that here would shrink html/body under the
+      // keyboard and feed another resize, so hold the layout viewport instead.
+      const zoomed = (vv?.scale ?? 1) > ZOOM_EPSILON;
+      const height = !vv || zoomed ? window.innerHeight : vv.height;
       root.style.setProperty('--vvh', `${height}px`);
     };
     syncVvh();

@@ -13,7 +13,7 @@ import { FormAlert } from '@/components/ui/app/FormAlert';
 import { ErrorState, LoadingState } from '@/components/ui/app/LoadingState';
 import { Reveal } from '@/components/ui/Reveal';
 import { useApiResource } from '@/hooks/useApiResource';
-import { useIsMobileChat, useVisualViewport } from '@/hooks/useVisualViewport';
+import { useIsMobileChat, useVisualViewport, ZOOM_EPSILON } from '@/hooks/useVisualViewport';
 import { useToast } from '@/app/providers/ToastProvider';
 import { messageApi } from '@/lib/api/messages';
 import type { ChatMessage, ConversationDetail } from '@/lib/api/messages';
@@ -141,20 +141,9 @@ export default function ConversationPage() {
     if (!isMobile) composerRef.current?.focus();
   }, [id, isMobile]);
 
-  // iOS can scroll the layout viewport when the keyboard opens — pin it back.
-  useEffect(() => {
-    if (!isMobile) return;
-    const pin = () => {
-      if (window.scrollY !== 0) window.scrollTo(0, 0);
-    };
-    pin();
-    window.visualViewport?.addEventListener('resize', pin);
-    window.visualViewport?.addEventListener('scroll', pin);
-    return () => {
-      window.visualViewport?.removeEventListener('resize', pin);
-      window.visualViewport?.removeEventListener('scroll', pin);
-    };
-  }, [isMobile]);
+  // No scroll pinning here: `html.chat-thread-active` already locks page scroll
+  // with `overflow: hidden`, so there is nothing to pin back. A scrollTo() on
+  // every visualViewport event only fights Safari's own caret-reveal scroll.
 
   const onScroll = useCallback(() => {
     const el = scrollRef.current;
@@ -304,13 +293,18 @@ export default function ConversationPage() {
   const peerFirst = peer?.name.split(/\s+/)[0] ?? title;
   const canSend = Boolean(draft.trim()) && !isSending;
 
+  // `position: fixed` resolves against the layout viewport, but offsetTop/height
+  // are visual-viewport numbers. They agree only at scale 1. While the page is
+  // zoomed, feeding them back makes the shell chase Safari's panning, so hold a
+  // plain full-height shell until the user is back at 1.
+  const isZoomed = viewport.scale > ZOOM_EPSILON;
   const shellStyle = isMobile
     ? {
         position: 'fixed' as const,
         left: 0,
         right: 0,
-        top: viewport.offsetTop,
-        height: viewport.height || undefined,
+        top: isZoomed ? 0 : viewport.offsetTop,
+        height: isZoomed ? '100dvh' : viewport.height || undefined,
         zIndex: 40,
       }
     : undefined;
@@ -523,8 +517,13 @@ export default function ConversationPage() {
                   maxLength={20000}
                   enterKeyHint="send"
                   className={cn(
-                    'max-h-40 flex-1 resize-none bg-transparent text-sm leading-relaxed text-aubergine outline-none placeholder:text-muted',
-                    isMobile ? 'min-h-[44px] px-3.5 py-2.5' : 'min-h-[40px] px-2.5 py-2',
+                    'max-h-40 flex-1 resize-none bg-transparent leading-relaxed text-aubergine outline-none placeholder:text-muted',
+                    // 16px on mobile is load-bearing, not a type choice: iOS Safari
+                    // zooms the page on focus for any field under 16px, and that zoom
+                    // is what makes the keyboard-aware shell flicker on send.
+                    isMobile
+                      ? 'min-h-[44px] px-3.5 py-2.5 text-base'
+                      : 'min-h-[40px] px-2.5 py-2 text-sm',
                   )}
                   aria-label="Message"
                 />
