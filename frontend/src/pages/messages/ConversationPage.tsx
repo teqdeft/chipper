@@ -13,6 +13,7 @@ import { FormAlert } from '@/components/ui/app/FormAlert';
 import { ErrorState, LoadingState } from '@/components/ui/app/LoadingState';
 import { Reveal } from '@/components/ui/Reveal';
 import { useApiResource } from '@/hooks/useApiResource';
+import { useIsMobileChat, useVisualViewport } from '@/hooks/useVisualViewport';
 import { useToast } from '@/app/providers/ToastProvider';
 import { messageApi } from '@/lib/api/messages';
 import type { ChatMessage, ConversationDetail } from '@/lib/api/messages';
@@ -39,11 +40,16 @@ type LocalMessage = ChatMessage & {
  * Membership is the API's job: a thread the caller does not belong to comes back
  * as a 404, so guessing a conversation id reveals nothing. This screen only has
  * to render that as "not found".
+ *
+ * Mobile: full-viewport chat shell (keyboard-aware via visualViewport).
+ * Desktop / tablet: card in the page flow, unchanged.
  */
 export default function ConversationPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const toast = useToast();
+  const isMobile = useIsMobileChat();
+  const viewport = useVisualViewport(isMobile);
 
   const { data, isLoading, error, reload, setData } = useApiResource(
     () => messageApi.get(id!, { limit: 100 }),
@@ -91,7 +97,7 @@ export default function ConversationPage() {
   useLayoutEffect(() => {
     if (!stickToBottom.current) return;
     endRef.current?.scrollIntoView({ block: 'end' });
-  }, [messages.length, messages[messages.length - 1]?.id]);
+  }, [messages.length, messages[messages.length - 1]?.id, viewport.height]);
 
   // Soft poll — merge new messages without a full loading flash.
   useEffect(() => {
@@ -132,8 +138,23 @@ export default function ConversationPage() {
   }, [id, Boolean(data)]);
 
   useEffect(() => {
-    composerRef.current?.focus();
-  }, [id]);
+    if (!isMobile) composerRef.current?.focus();
+  }, [id, isMobile]);
+
+  // iOS can scroll the layout viewport when the keyboard opens — pin it back.
+  useEffect(() => {
+    if (!isMobile) return;
+    const pin = () => {
+      if (window.scrollY !== 0) window.scrollTo(0, 0);
+    };
+    pin();
+    window.visualViewport?.addEventListener('resize', pin);
+    window.visualViewport?.addEventListener('scroll', pin);
+    return () => {
+      window.visualViewport?.removeEventListener('resize', pin);
+      window.visualViewport?.removeEventListener('scroll', pin);
+    };
+  }, [isMobile]);
 
   const onScroll = useCallback(() => {
     const el = scrollRef.current;
@@ -211,6 +232,14 @@ export default function ConversationPage() {
     }
   }
 
+  function handleComposerFocus() {
+    stickToBottom.current = true;
+    // Wait a beat for the keyboard / visualViewport resize, then pin to latest.
+    window.setTimeout(() => {
+      endRef.current?.scrollIntoView({ block: 'end' });
+    }, 80);
+  }
+
   async function retryFailed(message: LocalMessage) {
     if (!message.clientKey) return;
     setPending((rows) => rows.filter((row) => row.clientKey !== message.clientKey));
@@ -242,7 +271,7 @@ export default function ConversationPage() {
 
   if (isLoading) {
     return (
-      <div className="container-content">
+      <div className={cn(isMobile ? 'flex h-full items-center justify-center px-6' : 'container-content')}>
         <LoadingState label="Loading conversation…" />
       </div>
     );
@@ -251,7 +280,7 @@ export default function ConversationPage() {
   if (error) {
     if (error.title === 'Not found' || error.tone === 'warning') {
       return (
-        <div className="container-content">
+        <div className={cn(isMobile ? 'flex h-full items-center px-6' : 'container-content')}>
           <Reveal>
             <EmptyState
               title="Conversation not found"
@@ -264,7 +293,7 @@ export default function ConversationPage() {
       );
     }
     return (
-      <div className="container-content">
+      <div className={cn(isMobile ? 'flex h-full items-center px-6' : 'container-content')}>
         <ErrorState error={error} onRetry={reload} />
       </div>
     );
@@ -272,16 +301,59 @@ export default function ConversationPage() {
 
   if (!data) return null;
 
+  const peerFirst = peer?.name.split(/\s+/)[0] ?? title;
+  const canSend = Boolean(draft.trim()) && !isSending;
+
+  const shellStyle = isMobile
+    ? {
+        position: 'fixed' as const,
+        left: 0,
+        right: 0,
+        top: viewport.offsetTop,
+        height: viewport.height || undefined,
+        zIndex: 40,
+      }
+    : undefined;
+
   return (
-    <div className="page-pad-flush">
-      <div className="container-content max-w-3xl pb-6 pt-2 sm:pb-8 sm:pt-3">
-        <Reveal>
-          <div className="flex h-[min(72vh,720px)] min-h-[420px] flex-col overflow-hidden rounded-card border border-line bg-surface shadow-soft">
+    <div
+      className={cn(
+        isMobile ? 'bg-canvas' : 'page-pad-flush',
+      )}
+    >
+      <div
+        className={cn(
+          isMobile
+            ? 'flex h-full min-h-0 flex-col'
+            : 'container-content max-w-3xl pb-6 pt-2 sm:pb-8 sm:pt-3',
+        )}
+      >
+        <Reveal
+          className={isMobile ? 'flex min-h-0 flex-1 flex-col' : undefined}
+          y={isMobile ? 0 : 22}
+          delay={isMobile ? 0 : undefined}
+        >
+          <div
+            style={shellStyle}
+            className={cn(
+              'flex min-h-0 flex-col overflow-hidden bg-surface',
+              isMobile
+                ? 'h-full border-0 shadow-none'
+                : 'h-[min(72vh,720px)] min-h-[420px] rounded-card border border-line shadow-soft',
+            )}
+          >
             {/* Thread header */}
-            <header className="flex items-center gap-3 border-b border-line bg-canvas px-4 py-3.5 sm:px-5">
+            <header
+              className={cn(
+                'flex shrink-0 items-center gap-2.5 border-b border-line bg-canvas/95 backdrop-blur-md sm:gap-3 sm:px-5 sm:py-3.5',
+                isMobile
+                  ? 'px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))]'
+                  : 'px-4 py-3.5',
+              )}
+            >
               <Link
                 to="/messages"
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:bg-canvas hover:text-aubergine"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-lg text-muted transition-colors hover:bg-periwinkle-tint/50 hover:text-aubergine active:scale-95"
                 aria-label="Back to inbox"
               >
                 ←
@@ -309,7 +381,7 @@ export default function ConversationPage() {
                 </div>
               )}
 
-              <div className="flex shrink-0 items-center gap-1.5">
+              <div className="flex shrink-0 items-center gap-1">
                 {peer ? (
                   <Link
                     to={`/u/${peer.handle}`}
@@ -323,12 +395,12 @@ export default function ConversationPage() {
                     type="button"
                     onClick={handleToggleArchive}
                     disabled={isTogglingArchive}
-                    className="rounded-btn px-3 py-1.5 text-xs font-semibold text-muted transition-colors hover:bg-canvas hover:text-aubergine disabled:opacity-60"
+                    className="rounded-btn px-2.5 py-1.5 text-xs font-semibold text-muted transition-colors hover:bg-periwinkle-tint/40 hover:text-aubergine disabled:opacity-60 sm:px-3"
                   >
                     {isTogglingArchive
                       ? '…'
                       : data.conversation.isArchived
-                        ? 'Move to inbox'
+                        ? 'Inbox'
                         : 'Archive'}
                   </button>
                 ) : null}
@@ -336,7 +408,7 @@ export default function ConversationPage() {
             </header>
 
             {data.conversation.isArchived ? (
-              <p className="border-b border-line bg-periwinkle-tint/35 px-4 py-2 text-center text-xs font-medium text-muted sm:px-5">
+              <p className="shrink-0 border-b border-line bg-periwinkle-tint/35 px-4 py-2 text-center text-xs font-medium text-muted sm:px-5">
                 Archived
                 {data.conversation.subject ? ` · ${data.conversation.subject}` : ''}.{' '}
                 <button
@@ -349,7 +421,7 @@ export default function ConversationPage() {
                 </button>
               </p>
             ) : data.conversation.subject ? (
-              <p className="border-b border-line bg-periwinkle-tint/25 px-4 py-2 text-center text-xs font-medium text-muted sm:px-5">
+              <p className="shrink-0 border-b border-line bg-periwinkle-tint/25 px-4 py-2 text-center text-xs font-medium text-muted sm:px-5">
                 {data.conversation.subject}
               </p>
             ) : null}
@@ -359,7 +431,10 @@ export default function ConversationPage() {
               ref={scrollRef}
               onScroll={onScroll}
               data-lenis-prevent
-              className="scrollbar-panel relative min-h-0 flex-1 overflow-y-auto overscroll-contain bg-canvas px-3 py-4 sm:px-5"
+              className={cn(
+                'scrollbar-panel relative min-h-0 flex-1 overflow-y-auto overscroll-contain bg-canvas',
+                isMobile ? 'px-3 py-3' : 'px-3 py-4 sm:px-5',
+              )}
             >
               {messages.length === 0 ? (
                 <div className="flex h-full flex-col items-center justify-center px-6 text-center">
@@ -393,6 +468,7 @@ export default function ConversationPage() {
                         <MessageBubble
                           message={message}
                           grouped={grouped}
+                          compact={isMobile}
                           onRetry={message.status === 'failed' ? () => void retryFailed(message) : undefined}
                         />
                       </div>
@@ -403,14 +479,19 @@ export default function ConversationPage() {
               <div ref={endRef} className="h-px" />
             </div>
 
-            {/* Composer */}
+            {/* Composer — sticks above the soft keyboard + home indicator */}
             <form
-              className="border-t border-line bg-canvas/95 p-3 backdrop-blur-sm sm:p-4"
+              className={cn(
+                'shrink-0 border-t border-line bg-canvas/95 backdrop-blur-md',
+                isMobile
+                  ? 'px-3 pt-2.5 pb-[max(0.65rem,env(safe-area-inset-bottom))]'
+                  : 'p-3 sm:p-4',
+              )}
               onSubmit={handleSend}
               noValidate
             >
               {alert ? (
-                <div className="mb-3">
+                <div className="mb-2.5 sm:mb-3">
                   <FormAlert
                     tone="error"
                     title={alert.title}
@@ -420,7 +501,14 @@ export default function ConversationPage() {
                 </div>
               ) : null}
 
-              <div className="flex items-end gap-2 rounded-card border border-line bg-periwinkle-tint/20 p-2 transition-[border-color,box-shadow] focus-within:border-line-strong focus-within:shadow-ring">
+              <div
+                className={cn(
+                  'flex items-end gap-2 transition-[border-color,box-shadow]',
+                  isMobile
+                    ? 'rounded-[1.35rem] border border-line bg-periwinkle-tint/25 py-1 pl-1 pr-1 focus-within:border-line-strong focus-within:shadow-ring'
+                    : 'rounded-card border border-line bg-periwinkle-tint/20 p-2 focus-within:border-line-strong focus-within:shadow-ring',
+                )}
+              >
                 <textarea
                   ref={composerRef}
                   value={draft}
@@ -429,28 +517,60 @@ export default function ConversationPage() {
                     resizeComposer();
                   }}
                   onKeyDown={handleComposerKey}
-                  placeholder={`Message ${peer?.name.split(/\s+/)[0] ?? title}…`}
+                  onFocus={handleComposerFocus}
+                  placeholder={`Message ${peerFirst}…`}
                   rows={1}
                   maxLength={20000}
-                  className="max-h-40 min-h-[40px] flex-1 resize-none bg-transparent px-2.5 py-2 text-sm leading-relaxed text-aubergine outline-none placeholder:text-muted"
+                  enterKeyHint="send"
+                  className={cn(
+                    'max-h-40 flex-1 resize-none bg-transparent text-sm leading-relaxed text-aubergine outline-none placeholder:text-muted',
+                    isMobile ? 'min-h-[44px] px-3.5 py-2.5' : 'min-h-[40px] px-2.5 py-2',
+                  )}
                   aria-label="Message"
                 />
                 <button
                   type="submit"
-                  disabled={!draft.trim() || isSending}
-                  className="btn-primary !rounded-btn !px-4 !py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={!canSend}
+                  aria-label="Send message"
+                  className={cn(
+                    'shrink-0 transition-all disabled:cursor-not-allowed disabled:opacity-40',
+                    isMobile
+                      ? cn(
+                          'flex h-11 w-11 items-center justify-center rounded-full text-aubergine',
+                          canSend
+                            ? 'bg-yellow shadow-soft active:scale-95'
+                            : 'bg-periwinkle-tint/60',
+                        )
+                      : 'btn-primary !rounded-btn !px-4 !py-2 text-sm',
+                  )}
                 >
-                  {isSending ? '…' : 'Send'}
+                  {isMobile ? (
+                    <SendIcon className="h-5 w-5" />
+                  ) : isSending ? (
+                    '…'
+                  ) : (
+                    'Send'
+                  )}
                 </button>
               </div>
-              <p className="mt-2 px-1 text-[0.65rem] text-muted">
-                Enter to send · Shift+Enter for a new line
-              </p>
+              {!isMobile ? (
+                <p className="mt-2 px-1 text-[0.65rem] text-muted">
+                  Enter to send · Shift+Enter for a new line
+                </p>
+              ) : null}
             </form>
           </div>
         </Reveal>
       </div>
     </div>
+  );
+}
+
+function SendIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden>
+      <path d="M3.4 20.4 21 12 3.4 3.6l-.1 6.9L15 12 3.3 13.5l.1 6.9Z" />
+    </svg>
   );
 }
 
@@ -500,10 +620,12 @@ function Avatar({ name, avatarUrl }: { name: string; avatarUrl: string | null })
 function MessageBubble({
   message,
   grouped,
+  compact,
   onRetry,
 }: {
   message: LocalMessage;
   grouped: boolean;
+  compact?: boolean;
   onRetry?: () => void;
 }) {
   const mine = message.from === 'me';
@@ -513,7 +635,7 @@ function MessageBubble({
   return (
     <div
       className={cn(
-        'flex gap-2.5',
+        'flex gap-2',
         mine ? 'justify-end' : 'justify-start',
         grouped ? 'mt-0.5' : 'mt-3',
       )}
@@ -521,7 +643,7 @@ function MessageBubble({
       {!mine ? (
         <span
           className={cn(
-            'mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-periwinkle-tint text-[0.6rem] font-bold text-aubergine',
+            'mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-periwinkle-tint text-[0.6rem] font-bold text-aubergine sm:h-8 sm:w-8',
             grouped && 'invisible',
           )}
           aria-hidden
@@ -534,15 +656,22 @@ function MessageBubble({
         </span>
       ) : null}
 
-      <div className={cn('flex max-w-[min(85%,28rem)] flex-col', mine ? 'items-end' : 'items-start')}>
+      <div
+        className={cn(
+          'flex flex-col',
+          mine ? 'items-end' : 'items-start',
+          compact ? 'max-w-[min(88%,20rem)]' : 'max-w-[min(85%,28rem)]',
+        )}
+      >
         <div
           className={cn(
-            'px-3.5 py-2.5 text-sm leading-relaxed shadow-soft transition-opacity',
+            'text-sm leading-relaxed shadow-soft transition-opacity',
+            compact ? 'px-3.5 py-2' : 'px-3.5 py-2.5',
             mine
-              ? 'rounded-card rounded-br-md bg-aubergine text-canvas'
-              : 'rounded-card rounded-bl-md border border-line bg-surface text-aubergine',
-            grouped && mine && 'rounded-tr-[18px]',
-            grouped && !mine && 'rounded-tl-[18px]',
+              ? 'rounded-[1.15rem] rounded-br-md bg-aubergine text-canvas'
+              : 'rounded-[1.15rem] rounded-bl-md border border-line bg-surface text-aubergine',
+            grouped && mine && 'rounded-tr-lg',
+            grouped && !mine && 'rounded-tl-lg',
             sending && 'opacity-70',
             failed && 'ring-1 ring-deep-coral/50',
           )}
@@ -572,8 +701,7 @@ function MessageBubble({
 
         <p
           className={cn(
-            'mt-1 px-1 text-[0.65rem] font-medium',
-            mine ? 'text-muted' : 'text-muted',
+            'mt-1 px-1 text-[0.65rem] font-medium text-muted',
             failed && 'text-deep-coral',
           )}
         >

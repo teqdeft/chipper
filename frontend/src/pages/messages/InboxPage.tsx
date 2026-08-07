@@ -43,7 +43,7 @@ export default function InboxPage() {
   }
 
   return (
-    <div className="container-content max-w-3xl space-y-8">
+    <div className="container-content max-w-3xl space-y-6 sm:space-y-8">
       <PageHeader
         eyebrow="Messages"
         title="Inbox"
@@ -59,7 +59,7 @@ export default function InboxPage() {
 
       <Reveal delay={0.04}>
         <div
-          className="inline-flex rounded-btn border border-line bg-periwinkle-tint/30 p-1"
+          className="inline-flex w-full rounded-btn border border-line bg-periwinkle-tint/30 p-1 sm:w-auto"
           role="tablist"
           aria-label="Message folders"
         >
@@ -71,7 +71,7 @@ export default function InboxPage() {
               aria-selected={tab === key}
               onClick={() => setTab(key)}
               className={cn(
-                'rounded-btn px-4 py-2 text-sm font-semibold capitalize transition-colors',
+                'flex-1 rounded-btn px-4 py-2.5 text-sm font-semibold capitalize transition-colors sm:flex-none sm:py-2',
                 tab === key
                   ? 'bg-canvas text-aubergine shadow-soft'
                   : 'text-muted hover:text-aubergine',
@@ -142,7 +142,7 @@ function ConversationRow({
   return (
     <div
       className={cn(
-        'group relative flex items-start gap-3.5 border-b border-line px-4 py-4 transition-colors last:border-b-0 sm:gap-4 sm:px-5',
+        'group relative flex items-start gap-3.5 border-b border-line px-3.5 py-3.5 transition-colors last:border-b-0 active:bg-periwinkle-tint/40 sm:gap-4 sm:px-5 sm:py-4',
         unread ? 'bg-coral/[0.04] hover:bg-coral/[0.07]' : 'hover:bg-periwinkle-tint/35',
       )}
     >
@@ -153,10 +153,10 @@ function ConversationRow({
         />
       ) : null}
 
-      <Link to={`/messages/${conversation.id}`} className="flex min-w-0 flex-1 items-start gap-3.5 sm:gap-4">
+      <Link to={`/messages/${conversation.id}`} className="flex min-w-0 flex-1 items-start gap-3 sm:gap-4">
         <span
           className={cn(
-            'relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full text-xs font-bold ring-2 ring-canvas',
+            'relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full text-xs font-bold ring-2 ring-canvas sm:h-11 sm:w-11',
             unread ? 'bg-deep-coral text-canvas' : 'bg-periwinkle-tint text-aubergine',
           )}
           aria-hidden

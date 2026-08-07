@@ -99,6 +99,16 @@
     overflow-x: clip;
   }
 
+  /* Mobile conversation — lock page scroll so only the message stream moves */
+  @media (max-width: 639px) {
+    html.chat-thread-active,
+    html.chat-thread-active body {
+      overflow: hidden;
+      overscroll-behavior: none;
+      height: var(--vvh, 100dvh);
+    }
+  }
+
   ::selection {
     background: #fc7147;
     color: #fffcf9;
