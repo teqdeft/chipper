@@ -132,21 +132,35 @@ export default function Navbar({ mode = 'marketing' }: NavbarProps) {
       const hero = document.getElementById('hero');
       if (!hero || cancelled) return false;
       observer = new IntersectionObserver(
-        ([entry]) => {
+        (entries) => {
           // Nav sits on aubergine while the hero sticky band still intersects the top.
-          setOverAubergine(entry.isIntersecting);
+          //
+          // Read the LAST record, not the first: entries arrive oldest-first, and
+          // a busy main thread (GSAP scrub + the chip's frame loop) lets several
+          // queue into one callback. Taking entries[0] applied a stale `true` and
+          // left the bar transparent over coral until the next crossing.
+          setOverAubergine(entries[entries.length - 1].isIntersecting);
         },
-        { rootMargin: '-1px 0px -70% 0px', threshold: [0, 0.01, 0.1] },
+        // Single threshold on purpose: only the boundary cross matters here, and
+        // the hero is so much taller than the band that the ratio never clears
+        // ~0.11 — extra thresholds just queued more records to batch.
+        { rootMargin: '-1px 0px -70% 0px', threshold: 0 },
       );
       observer.observe(hero);
       return true;
     };
 
     if (!attach()) {
-      // Hero mounts with the page; retry once on next frame if needed.
-      const raf = requestAnimationFrame(() => {
-        if (!attach()) setOverAubergine(true);
-      });
+      // Hero mounts with the page, but a route transition can land this effect a
+      // frame early. Keep retrying for a few frames — giving up left the bar
+      // transparent with no observer at all, which no amount of scrolling fixed.
+      let tries = 0;
+      let raf = 0;
+      const retry = () => {
+        if (cancelled || attach()) return;
+        if (++tries < 10) raf = requestAnimationFrame(retry);
+      };
+      raf = requestAnimationFrame(retry);
       return () => {
         cancelled = true;
         cancelAnimationFrame(raf);
